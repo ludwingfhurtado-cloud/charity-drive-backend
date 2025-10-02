@@ -1,9 +1,8 @@
-
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const fetch = require('node-fetch'); // <-- ADD THIS LINE
+const fetch = require('node-fetch');
 const Ride = require('./models/Ride');
 
 const app = express();
@@ -56,10 +55,10 @@ app.get('/api/reverse-geocode', async (req, res) => {
     }
     const data = await response.json();
 
-    // Enhanced logging to debug Nominatim responses
-    console.log('Nominatim Raw Response:', data);
+    // Enhanced logging and fallback as per user's excellent suggestion
     if (!data.display_name) {
-        console.warn('Warning: Nominatim response was successful but did not contain a display_name.');
+        console.warn(`Warning: Nominatim response for lat=${lat}, lng=${lng} was successful but did not contain a display_name.`, data);
+        return res.json({ address: "Address not found" });
     }
 
     res.json({ address: data.display_name });

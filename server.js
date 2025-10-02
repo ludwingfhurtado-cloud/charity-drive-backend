@@ -59,13 +59,13 @@ app.post('/api/rides', async (req, res) => {
             charity
         } = req.body;
 
-        // SANITIZE THE DATA: Create a new ride object with only the fields defined in the schema.
-        const newRide = new Ride({
+        // Build the ride data payload defensively
+        const rideData = {
             pickup,
             dropoff,
             pickupAddress,
             dropoffAddress,
-            rideOption: {
+            rideOption: { // rideOption is required by schema
                 id: rideOption.id,
                 multiplier: rideOption.multiplier
             },
@@ -73,15 +73,19 @@ app.post('/api/rides', async (req, res) => {
             finalFare,
             distanceInKm,
             travelTimeInMinutes,
-            // Explicitly create the charity object to match the schema.
-            charity: {
+            status: 'pending'
+        };
+
+        // Sanitize and add the optional charity object only if it's valid and provided
+        if (charity && charity.id && charity.name && charity.description) {
+            rideData.charity = {
                 id: charity.id,
                 name: charity.name,
                 description: charity.description
-            },
-            status: 'pending'
-        });
+            };
+        }
 
+        const newRide = new Ride(rideData);
         await newRide.save();
         res.status(201).json(newRide);
     } catch (error) {
@@ -131,6 +135,7 @@ app.delete('/api/rides/:id', async (req, res) => {
 
 // Determine port for Railway, but fallback to 3001 for local dev.
 const effectivePort = process.env.PORT || 3001;
-app.listen(effectivePort, '0.0.0.0', () => {
+// Removed explicit host binding for better compatibility with production environments like Railway.
+app.listen(effectivePort, () => {
     console.log(`Charity Drive server listening on port: ${effectivePort}`);
 });

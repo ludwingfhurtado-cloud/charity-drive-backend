@@ -1,7 +1,9 @@
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const fetch = require('node-fetch'); // <-- ADD THIS LINE
 const Ride = require('./models/Ride');
 
 const app = express();
@@ -22,7 +24,6 @@ mongoose.connect(MONGODB_URI)
     .then(() => console.log('Successfully connected to MongoDB.'))
     .catch(err => {
         console.error('MongoDB connection error:', err);
-        // Don't exit on initial connection error, allow for retries by the driver.
     });
 
 // --- API Routes ---
@@ -31,6 +32,77 @@ mongoose.connect(MONGODB_URI)
 app.get('/', (req, res) => {
     res.json({ status: 'ok', message: 'Charity Drive server is running' });
 });
+
+// NEW: GET /api/reverse-geocode - Handle reverse geocoding from the backend
+app.get('/api/reverse-geocode', async (req, res) => {
+  const { lat, lng, lang = 'es' } = req.query;
+
+  if (!lat || !lng) {
+    return res.status(400).json({ message: 'Missing latitude or longitude parameters.' });
+  }
+
+  try {
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+    const response = await fetch(nominatimUrl, {
+      headers: {
+        'User-Agent': 'CharityDriveWebApp/1.0',
+        'Accept-Language': lang
+      }
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Nominatim reverse geocode failed:', response.status, errorText);
+        throw new Error(`Nominatim API responded with status: ${response.status}`);
+    }
+    const data = await response.json();
+
+    // Enhanced logging to debug Nominatim responses
+    console.log('Nominatim Raw Response:', data);
+    if (!data.display_name) {
+        console.warn('Warning: Nominatim response was successful but did not contain a display_name.');
+    }
+
+    res.json({ address: data.display_name });
+  } catch (err) {
+    console.error('Reverse geocode error:', err.message);
+    res.status(500).json({ message: 'Failed to get address from geocoding service.' });
+  }
+});
+
+// NEW: GET /api/search-locations - Handle location search from the backend
+app.get('/api/search-locations', async (req, res) => {
+    const { query, lang = 'es' } = req.query;
+
+    if (!query || query.trim().length < 3) {
+        return res.status(400).json({ message: 'Search query must be at least 3 characters long.' });
+    }
+
+    try {
+        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+        const response = await fetch(nominatimUrl, {
+            headers: {
+                'User-Agent': 'CharityDriveWebApp/1.0',
+                'Accept-Language': lang
+            }
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Nominatim search failed:', response.status, errorText);
+            throw new Error(`Nominatim API responded with status: ${response.status}`);
+        }
+        const data = await response.json();
+        const results = data.map((item) => ({
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+            address: item.display_name,
+        }));
+        res.json(results);
+    } catch (err) {
+        console.error('Search locations error:', err.message);
+        res.status(500).json({ message: 'Failed to search for locations.' });
+    }
+});
+
 
 // GET /api/rides - Fetch all available ride requests
 app.get('/api/rides', async (req, res) => {
@@ -58,14 +130,15 @@ app.post('/api/rides', async (req, res) => {
             travelTimeInMinutes,
             charity
         } = req.body;
-
-        // Build the ride data payload defensively
+        
+        // Defensive Payload Construction
         const rideData = {
             pickup,
             dropoff,
             pickupAddress,
             dropoffAddress,
-            rideOption: { // rideOption is required by schema
+            // Explicitly sanitize the rideOption object
+            rideOption: {
                 id: rideOption.id,
                 multiplier: rideOption.multiplier
             },
@@ -75,13 +148,13 @@ app.post('/api/rides', async (req, res) => {
             travelTimeInMinutes,
             status: 'pending'
         };
-
-        // Sanitize and add the optional charity object only if it's valid and provided
-        if (charity && charity.id && charity.name && charity.description) {
+        
+        // Explicitly sanitize and add the charity object if it's valid
+        if (charity && charity.id && charity.name) {
             rideData.charity = {
                 id: charity.id,
                 name: charity.name,
-                description: charity.description
+                description: charity.description || '' // Default description if missing
             };
         }
 
@@ -90,6 +163,7 @@ app.post('/api/rides', async (req, res) => {
         res.status(201).json(newRide);
     } catch (error) {
         console.error('Error creating ride:', error.message);
+        // Provide more detailed validation error in development
         res.status(400).json({ message: 'Invalid ride data provided.', error: error.message });
     }
 });
@@ -133,9 +207,7 @@ app.delete('/api/rides/:id', async (req, res) => {
     }
 });
 
-// Determine port for Railway, but fallback to 3001 for local dev.
 const effectivePort = process.env.PORT || 3001;
-// Removed explicit host binding for better compatibility with production environments like Railway.
 app.listen(effectivePort, () => {
     console.log(`Charity Drive server listening on port: ${effectivePort}`);
 });

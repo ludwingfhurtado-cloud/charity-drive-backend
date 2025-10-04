@@ -6,15 +6,20 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Proxy standard HTTP API requests to the backend server
-      '/api': {
-        target: 'http://localhost:3001',
+      // Proxy the root health check route
+      '/health': {
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
       },
-      // Proxy WebSocket connections for Socket.IO to the backend server
+      // Proxy all API requests under the /api prefix to the backend server
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+      // Proxy Socket.IO connections (which use WebSockets)
       '/socket.io': {
-        target: 'http://localhost:3001',
-        ws: true, // This is the crucial setting that enables WebSocket proxying
+        target: 'http://127.0.0.1:3001',
+        ws: true,
       },
     },
   },

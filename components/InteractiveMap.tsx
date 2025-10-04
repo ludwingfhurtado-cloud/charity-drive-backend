@@ -7,89 +7,6 @@ declare global {
   var google: any;
 }
 
-// --- Google Maps Dark Theme Style ---
-const mapStyles = [
-  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-  {
-    featureType: "administrative.locality",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#d59563" }],
-  },
-  {
-    featureType: "poi",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#d59563" }],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "geometry",
-    stylers: [{ color: "#263c3f" }],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#6b9a76" }],
-  },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [{ color: "#38414e" }],
-  },
-  {
-    featureType: "road",
-    elementType: "geometry.stroke",
-    stylers: [{ color: "#212a37" }],
-  },
-  {
-    featureType: "road",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#9ca5b3" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry",
-    stylers: [{ color: "#746855" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry.stroke",
-    stylers: [{ color: "#1f2835" }],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#f3d19c" }],
-  },
-  {
-    featureType: "transit",
-    elementType: "geometry",
-    stylers: [{ color: "#2f3948" }],
-  },
-  {
-    featureType: "transit.station",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#d59563" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#17263c" }],
-  },
-  {
-    featureType: "water",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#515c6d" }],
-  },
-  {
-    featureType: "water",
-    elementType: "labels.text.stroke",
-    stylers: [{ color: "#17263c" }],
-  },
-];
-
-
 // --- SVG & Icon Helpers ---
 
 const DriverMarkerSvg = () => `
@@ -129,39 +46,85 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
     driverRouteCoordinates,
     recenterMapTimestamp,
     handleDriverArrived,
-    isMapsApiLoaded,
   } = useAppContext();
   
   const { pickup, dropoff } = rideDetails;
   
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const mapRef = useRef<any | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [isApiLoaded, setIsApiLoaded] = useState(!!window.google);
   
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const pickupMarkerRef = useRef<any | null>(null);
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const dropoffMarkerRef = useRef<any | null>(null);
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const mainRouteLayerRef = useRef<any | null>(null);
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const driverRouteLayerRef = useRef<any | null>(null);
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const tripMarkerRef = useRef<any | null>(null);
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const driverMarkerRef = useRef<any | null>(null);
+  // FIX: Replaced specific Google Maps API types with 'any' to resolve namespace errors.
   const availableRidesLayerRef = useRef<any[]>([]);
   
   useEffect(() => {
-    if (!isMapsApiLoaded || !mapContainerRef.current || mapRef.current) return;
+    // Poll for the Google Maps API to be loaded, just in case.
+    if (!isApiLoaded) {
+      const interval = setInterval(() => {
+        if (window.google) {
+          setIsApiLoaded(true);
+          clearInterval(interval);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isApiLoaded]);
 
-    const map = new window.google.maps.Map(mapContainerRef.current, {
-        center: { lat: -17.7833, lng: -63.1812 },
-        zoom: 13,
-        disableDefaultUI: true,
-        styles: mapStyles,
+
+  useEffect(() => {
+    if (!isApiLoaded || !mapContainerRef.current) return;
+
+    // Initialize map only if it doesn't exist yet
+    if (!mapRef.current) {
+        mapRef.current = new window.google.maps.Map(mapContainerRef.current, {
+            center: { lat: -17.7833, lng: -63.1812 },
+            zoom: 13,
+            disableDefaultUI: true,
+            mapId: '3dbb10e80099880f6f7c3a5b',
+        });
+    }
+    const map = mapRef.current;
+
+    // This listener handles setting locations by clicking the map.
+    const clickListener = map.addListener('click', (e: any) => {
+        if (!e.latLng) return;
+        const clickedLatLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+
+        // If a mode is explicitly selected (e.g., from an input field focus), use it.
+        if (selectionMode) {
+            handleLocationSelect(clickedLatLng, null);
+        } 
+        // Otherwise, infer the mode from the current state.
+        // If there's no pickup, the click is for the pickup.
+        else if (!rideDetails.pickup) {
+            handleLocationSelect(clickedLatLng, null, 'pickup');
+        }
+        // If there is a pickup but no dropoff, the click is for the dropoff.
+        else if (!rideDetails.dropoff) {
+            handleLocationSelect(clickedLatLng, null, 'dropoff');
+        }
     });
-    mapRef.current = map;
 
-    map.addListener('click', (e: any) => {
-        if (!selectionMode || !e.latLng) return;
-        handleLocationSelect({ lat: e.latLng.lat(), lng: e.latLng.lng() }, null);
-    });
+    // Cleanup: Remove the listener when the effect re-runs or the component unmounts.
+    // This is crucial to prevent memory leaks and bugs from stale state in closures.
+    return () => {
+      google.maps.event.removeListener(clickListener);
+    };
 
-  }, [isMapsApiLoaded, selectionMode, handleLocationSelect]);
+  }, [isApiLoaded, selectionMode, handleLocationSelect, rideDetails.pickup, rideDetails.dropoff]);
 
   useEffect(() => {
     if (recenterMapTimestamp > 0 && mapRef.current) {
@@ -197,7 +160,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
               }
           });
       }
-  }, [isDriverMode, availableRides, appState, isMapsApiLoaded]);
+  }, [isDriverMode, availableRides, appState, isApiLoaded]);
 
   // DISPLAY: Main Trip Route
   useEffect(() => {
@@ -226,7 +189,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
             mapRef.current.fitBounds(bounds, { top: 100, bottom: bottomPanelHeight + 50, left: 50, right: 50 });
         }
     }
-  }, [tripRoute, appState, bottomPanelHeight, isMapsApiLoaded]);
+  }, [tripRoute, appState, bottomPanelHeight, isApiLoaded]);
 
   // DISPLAY: Driver Approach Route
   useEffect(() => {
@@ -246,7 +209,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
         });
         driverRouteLayerRef.current.setMap(mapRef.current);
     }
-  }, [appState, driverRouteCoordinates, isMapsApiLoaded]);
+  }, [appState, driverRouteCoordinates, isApiLoaded]);
 
    // Effect for driver marker
   useEffect(() => {
@@ -269,7 +232,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
               driverMarkerRef.current = null;
           }
       }
-  }, [appState, driverLocation, isMapsApiLoaded]);
+  }, [appState, driverLocation, isApiLoaded]);
     
   // Driver approach animation effect
   useEffect(() => {
@@ -304,7 +267,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
 
   // Effect for managing pickup/dropoff markers and map view
   useEffect(() => {
-    if (!mapRef.current || !isMapsApiLoaded) return;
+    if (!mapRef.current || !isApiLoaded) return;
     
     const shouldShowTripMarkers = !isDriverMode || [AppState.IN_PROGRESS, AppState.DRIVER_EN_ROUTE].includes(appState);
 
@@ -339,7 +302,7 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
       mapRef.current.panTo(pickup);
       mapRef.current.setZoom(15);
     }
-  }, [pickup, dropoff, appState, bottomPanelHeight, isDriverMode, driverLocation, isMapsApiLoaded]);
+  }, [pickup, dropoff, appState, bottomPanelHeight, isDriverMode, driverLocation, isApiLoaded]);
 
   // Trip simulation effect
   useEffect(() => {
@@ -414,10 +377,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ bottomPanelHeight }) =>
     }, 120);
 
     return cleanUpTripAnimation;
-  }, [appState, handleTripComplete, tripRoute, setTripProgress, isMapsApiLoaded, bottomPanelHeight]);
+  }, [appState, handleTripComplete, tripRoute, setTripProgress, isApiLoaded, bottomPanelHeight]);
 
   const getCursor = () => {
-    if (selectionMode) return 'crosshair';
+    if (selectionMode || (!selectionMode && !rideDetails.pickup)) return 'crosshair';
     if (appState === AppState.IN_PROGRESS || appState === AppState.DRIVER_EN_ROUTE) return 'default';
     return 'grab';
   }

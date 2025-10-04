@@ -7,47 +7,25 @@
     <title>Charity Drive</title>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!--
-    ================================================================================
-    === PRODUCTION-READY GOOGLE MAPS SETUP CHECKLIST (LOCAL DEVELOPMENT) ===
-    ================================================================================
-    To run this application locally, you must complete the following two steps.
-    This is the secure and standard way to handle API keys.
+    <!-- 
+      ============================================================================
+      API KEY FOR LOCAL DEVELOPMENT
+      ============================================================================
+      The Google Maps API key is hardcoded below to simplify local setup.
+      I've updated this to an alternate key from our conversation.
 
-    --- STEP 1: CREATE YOUR .env FILE ---
-    1. In the main project folder (the same folder as this index.html file),
-       create a new file named exactly: .env
-    2. Open the .env file and add the following line, replacing the key with
-       the one from your Google Cloud Console.
-    
-       VITE_GOOGLE_MAPS_API_KEY=AIzaSyCNkeZTHvkzH9LgL9hEFr9chFrDQzYTog
+      IF THE MAP STILL SHOWS AN ERROR (e.g., 'InvalidKeyMapError'):
+      The problem is 100% in your Google Cloud Console settings. Please verify:
+      1. BILLING is enabled for your project.
+      2. 'Maps JavaScript API', 'Routes API', and 'Places API' are all ENABLED.
+      3. The API key has no restrictions (for now).
 
-    --- STEP 2: CONFIGURE YOUR GOOGLE CLOUD PROJECT ---
-    The "This page can't load Google Maps correctly" error is a configuration
-    issue in your Google Cloud account. To fix it, you MUST do the following:
-
-    1. ENABLE BILLING:
-       - Go to https://console.cloud.google.com/billing
-       - Make sure your "CHARITY DRIVE" project is linked to an active billing account.
-         This is required by Google, even for the free tier.
-
-    2. ENABLE THE 3 REQUIRED APIs:
-       - Go to https://console.cloud.google.com/apis/library
-       - Search for and ENABLE each of these APIs one by one:
-         - Maps JavaScript API
-         - Routes API
-         - Places API
-
-    3. REMOVE KEY RESTRICTIONS (for local testing):
-       - Go to https://console.cloud.google.com/apis/credentials
-       - Click on the name of your API key.
-       - Under "Application restrictions", select "None" and save.
-
-    --- STEP 3: RESTART YOUR SERVER ---
-    After creating/changing your .env file, you MUST stop your dev server
-    (Ctrl+C in PowerShell) and restart it with `npm run dev`.
-    ================================================================================
+      IMPORTANT: This key should NOT be committed to a public repository.
+      We will switch back to a secure .env file before deploying.
+      ============================================================================
     -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBtBFFr3betYIEzC3mOXXKsLxJZgW3Cq-c&libraries=routes,places,marker&v=beta"></script>
+
   <script type="importmap">
 {
   "imports": {
@@ -56,7 +34,7 @@
     "react/": "https://aistudiocdn.com/react@^19.1.1/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
     "vite": "https://aistudiocdn.com/vite@^7.1.8",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/vitejs/plugin-react@^5.0.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.4",
     "socket.io-client": "https://aistudiocdn.com/socket.io-client@^4.8.1"
   }
 }
@@ -69,6 +47,17 @@
     }
     .animate-fade-in {
       animation: fadeIn 0.3s ease-out forwards;
+    }
+    /* Animation for the radar pulse effect */
+    @keyframes radar-pulse {
+      0% {
+        transform: scale(0.2);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(1.2);
+        opacity: 0;
+      }
     }
   </style>
 <link rel="stylesheet" href="/index.css">

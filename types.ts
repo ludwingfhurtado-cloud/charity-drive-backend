@@ -18,6 +18,8 @@ export type SelectionMode = 'pickup' | 'dropoff' | null;
 
 export type Language = 'en' | 'es' | 'pt';
 
+export type ServerStatus = 'connecting' | 'online' | 'offline';
+
 export interface RideOption {
   id: string;
   description?: string;
@@ -111,7 +113,7 @@ export interface AppContextType {
   handleBookingSubmit: (rideOption: RideOption, offeredFare: number, charityId: string) => void;
   handleTripComplete: () => void;
   handleReset: (returnToBooking?: boolean) => void;
-  handleLocationSelect: (latlng: LatLng, address: string | null) => void;
+  handleLocationSelect: (latlng: LatLng, address: string | null, forceMode?: SelectionMode) => void;
   handleSetPickup: (latlng: LatLng, address: string | null) => void;
   handleSetDropoff: (latlng: LatLng, address: string | null) => void;
   handleFocusLocationInput: (mode: SelectionMode) => void;
@@ -130,8 +132,13 @@ export interface AppContextType {
   answerCall: () => void;
   endCall: () => void;
   serverError: string | null;
-  setServerError: Dispatch<SetStateAction<string | null>>;
+  setServerError: (message: string | null) => void;
   isTestingConnection: boolean;
   handleTestConnection: () => void;
-  isMapsApiLoaded: boolean;
+  serverStatus: ServerStatus;
+  checkServerStatus: () => void;
+  pickupQuery: string;
+  setPickupQuery: Dispatch<SetStateAction<string>>;
+  dropoffQuery: string;
+  setDropoffQuery: Dispatch<SetStateAction<string>>;
 }

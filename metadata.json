@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Renewed Charity Drive google map upgrade",
+  "name": "Renewed Charity Drive",
   "description": "A ride-sharing inspired application where every fare is a donation to a charity of your choice. Experience the joy of giving with every simulated journey.",
   "requestFramePermissions": [
     "geolocation",

@@ -1,6 +1,6 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { AppState, RideDetails, RideOption, LatLng, SelectionMode, Language, RideRequest, Driver, Vehicle, Charity, ChatMessage, CallDetails, CallStatus } from '../types';
+import { AppState, RideDetails, RideOption, LatLng, SelectionMode, Language, RideRequest, Driver, Vehicle, Charity, ChatMessage, CallDetails, CallStatus, ServerStatus } from '../types';
 import { RIDE_OPTIONS } from '../constants';
 import { getConfirmationMessage } from '../services/geminiService';
 import { t } from '../i18n';
@@ -13,8 +13,10 @@ declare global {
   var gm_authFailure: () => void;
 }
 
-const API_BASE_URL = (import.meta as any)?.env?.VITE_API_URL || '/api';
-const SOCKET_URL = API_BASE_URL.startsWith('http') ? API_BASE_URL : window.location.origin;
+// FIX: Made access to import.meta.env robust to prevent runtime errors.
+const API_BASE_URL = (import.meta as any)?.env?.VITE_API_URL || '';
+const SOCKET_URL = API_BASE_URL; // Socket.IO will connect to the same host as the API
+
 
 interface AppContextType {
   appState: AppState;
@@ -47,7 +49,7 @@ interface AppContextType {
   handleBookingSubmit: (rideOption: RideOption, offeredFare: number, charityId: string) => void;
   handleTripComplete: () => void;
   handleReset: (returnToBooking?: boolean) => void;
-  handleLocationSelect: (latlng: LatLng, address: string | null) => void;
+  handleLocationSelect: (latlng: LatLng, address: string | null, forceMode?: SelectionMode) => void;
   handleSetPickup: (latlng: LatLng, address: string | null) => void;
   handleSetDropoff: (latlng: LatLng, address: string | null) => void;
   handleFocusLocationInput: (mode: SelectionMode) => void;
@@ -66,10 +68,15 @@ interface AppContextType {
   answerCall: () => void;
   endCall: () => void;
   serverError: string | null;
-  setServerError: React.Dispatch<React.SetStateAction<string | null>>;
+  setServerError: (message: string | null) => void;
   isTestingConnection: boolean;
   handleTestConnection: () => void;
-  isMapsApiLoaded: boolean;
+  serverStatus: ServerStatus;
+  checkServerStatus: () => void;
+  pickupQuery: string;
+  setPickupQuery: React.Dispatch<React.SetStateAction<string>>;
+  dropoffQuery: string;
+  setDropoffQuery: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -108,19 +115,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [driverLocation, setDriverLocation] = useState<LatLng | null>(null);
   const [recenterMapTimestamp, setRecenterMapTimestamp] = useState(0);
 
+  const [pickupQuery, setPickupQuery] = useState('');
+  const [dropoffQuery, setDropoffQuery] = useState('');
+
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [availableRides, setAvailableRides] = useState<RideRequest[]>([]);
   const [userRideRequestId, setUserRideRequestId] = useState<string | null>(null);
   const currentRideRequestRef = useRef<RideRequest | null>(null);
-  const socketRef = useRef<Socket | null>(null);
 
   const [isChatVisible, setIsChatVisible] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [callDetails, setCallDetails] = useState<CallDetails>({ status: CallStatus.NONE, type: 'voice', caller: 'rider' });
-  const [serverError, setServerError] = useState<string | null>(null);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [isMapsApiLoaded, setIsMapsApiLoaded] = useState(false);
-
+  
+  const [serverStatus, setServerStatus] = useState<ServerStatus>('connecting');
+  const [serverError, setServerErrorState] = useState<string | null>(null);
+  const serverErrorTimeoutRef = useRef<number | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const [rideDetails, setRideDetails] = useState<RideDetails>({
     pickup: null,
@@ -136,6 +147,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     vehicle: undefined,
     charity: undefined,
   });
+
+  const isDriverModeRef = useRef(isDriverMode);
+  useEffect(() => { isDriverModeRef.current = isDriverMode; }, [isDriverMode]);
+
+  const userRideRequestIdRef = useRef(userRideRequestId);
+  useEffect(() => { userRideRequestIdRef.current = userRideRequestId; }, [userRideRequestId]);
+  
+  const rideDetailsRef = useRef(rideDetails);
+  useEffect(() => {
+    rideDetailsRef.current = rideDetails;
+  }, [rideDetails]);
+
+
+  const setServerError = useCallback((message: string | null) => {
+    if (serverErrorTimeoutRef.current) {
+        clearTimeout(serverErrorTimeoutRef.current);
+    }
+    setServerErrorState(message);
+    if (message && !message.toLowerCase().includes('google')) {
+        serverErrorTimeoutRef.current = window.setTimeout(() => {
+            setServerErrorState(null);
+            serverErrorTimeoutRef.current = null;
+        }, 6000);
+    }
+  }, []);
+
 
   const updateRideDetails = useCallback((details: Partial<RideDetails>) => {
     setRideDetails(prev => ({ ...prev, ...details }));
@@ -158,128 +195,129 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const { reverseGeocode } = useLocationService();
   
-  useEffect(() => {
-    // This robust loader creates the script tag dynamically, eliminating race conditions.
-    if (window.google?.maps || document.getElementById('google-maps-script')) {
-      setIsMapsApiLoaded(true);
-      return;
+  const checkServerStatus = useCallback(async () => {
+    setServerStatus('connecting');
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`);
+      if (response.ok) {
+        setServerStatus('online');
+        setServerError(null);
+      } else {
+        setServerStatus('offline');
+      }
+    } catch (error) {
+      setServerStatus('offline');
     }
+  }, [setServerError]);
+  
+  useEffect(() => {
+    checkServerStatus();
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            checkServerStatus();
+        }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [checkServerStatus]);
 
-    const GOOGLE_MAPS_API_KEY = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
+  useEffect(() => {
+    window.gm_authFailure = () => {
+      setServerError("Google Maps Authentication Failed. This is a critical configuration error in your Google Cloud project.");
+    };
+    const timer = setTimeout(() => {
+      if (!window.google) {
+        setServerError("Failed to load Google Maps script. Check your internet connection, ad blockers, or the script tag in index.html.");
+      }
+    }, 5000);
+    return () => {
+      clearTimeout(timer);
+      if (window.gm_authFailure) {
+        delete window.gm_authFailure;
+      }
+    };
+  }, [setServerError]);
 
-    if (!GOOGLE_MAPS_API_KEY) {
-        setServerError("API Key is missing. Please create a .env file and add your VITE_GOOGLE_MAPS_API_KEY.");
+  // --- Socket.IO Connection Management ---
+  useEffect(() => {
+    if (serverStatus !== 'online') {
+        socketRef.current?.disconnect();
         return;
     }
 
-    // Set up the authentication failure callback *before* loading the script.
-    window.gm_authFailure = () => {
-      setServerError("Google Maps Authentication Failed. This is a configuration issue. Please follow the checklist in index.html to fix it.");
-    };
+    const socket = io(SOCKET_URL);
+    socketRef.current = socket;
 
-    const script = document.createElement('script');
-    script.id = 'google-maps-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=routes,places,marker&v=beta`;
-    script.async = true;
-    script.defer = true;
-    
-    script.onload = () => {
-        setIsMapsApiLoaded(true);
-        // Clean up the global callback after successful load
-        delete window.gm_authFailure;
-    };
+    socket.on('connect', () => {
+      console.log('Socket.IO connection established with ID:', socket.id);
+      setServerError(null);
+    });
 
-    script.onerror = () => {
-        setServerError("Failed to load Google Maps script. Please check your internet connection.");
-    };
+    socket.on('ride-list-update', (payload: RideRequest[]) => {
+      setAvailableRides(payload);
+    });
     
-    document.body.appendChild(script);
+    socket.on('ride-accepted', (payload: RideRequest) => {
+      if (!isDriverModeRef.current && userRideRequestIdRef.current === payload.id) {
+        // A driver accepted our ride request. Join the chat room.
+        socket.emit('join-ride-room', payload.id);
+        
+        const randomDriver = MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
+        const randomVehicle = MOCK_VEHICLES[Math.floor(Math.random() * MOCK_VEHICLES.length)];
+        const currentPickup = rideDetailsRef.current.pickup;
+        
+        updateRideDetails({ driver: randomDriver, vehicle: randomVehicle });
+        
+        if (currentPickup) {
+          const driverStartPos = { lat: currentPickup.lat + 0.005, lng: currentPickup.lng + 0.005 };
+          setDriverLocation(driverStartPos);
+        }
+        setAppState(AppState.DRIVER_EN_ROUTE);
+      }
+    });
+
+    socket.on('new-message', (payload: { rideId: string, message: ChatMessage }) => {
+       if (currentRideRequestRef.current && payload.rideId === currentRideRequestRef.current.id) {
+            setChatHistory(prev => [...prev, payload.message]);
+       }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Socket.IO connection lost.');
+      if (serverStatus === 'online') {
+          setServerError("Real-time connection lost. Reconnecting...");
+      }
+    });
+    
+    socket.on('connect_error', (error) => {
+        console.error('Socket.IO connection error:', error);
+        setServerError("Could not connect to the real-time server.");
+    });
 
     return () => {
-      // Clean up the script and callback if the component unmounts.
-      const existingScript = document.getElementById('google-maps-script');
-      if (existingScript) {
-        document.body.removeChild(existingScript);
-      }
-      delete window.gm_authFailure;
+      socket.disconnect();
     };
-  }, []);
-
-
-  const fetchAvailableRides = async () => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/rides`);
-        if (!response.ok) {
-            throw new Error(`Server responded with status: ${response.status}`);
-        }
-        const rides: RideRequest[] = await response.json();
-        setAvailableRides(rides);
-        if (serverError) setServerError(null);
-    } catch (error) {
-        console.error("Error fetching available rides:", error);
-        setServerError("Could not connect to the server. Please ensure it's running and try again.");
-        setAvailableRides([]);
-    }
-  };
+  }, [serverStatus, updateRideDetails, setServerError]);
   
-  // Real-time WebSocket connection management
   useEffect(() => {
-    // Connect to the socket server
-    socketRef.current = io(SOCKET_URL);
-
-    socketRef.current.on('connect', () => {
-      console.log('Socket.IO connected');
-      if (serverError?.includes('connect')) setServerError(null);
-    });
-
-    socketRef.current.on('connect_error', () => {
-      console.error('Socket.IO connection error');
-      setServerError("Real-time connection failed. The server may be offline.");
-    });
-    
-    // Listen for new rides (for drivers)
-    socketRef.current.on('newRide', (newRide: RideRequest) => {
-      if (isDriverMode) {
-        setAvailableRides(prevRides => [newRide, ...prevRides]);
+      if (isDriverMode && serverStatus === 'online') {
+          const fetchInitialRides = async () => {
+              try {
+                  const response = await fetch(`${API_BASE_URL}/api/rides`);
+                  if (!response.ok) throw new Error('Failed to fetch initial rides');
+                  const rides = await response.json();
+                  setAvailableRides(rides);
+              } catch (error) {
+                  console.error(error);
+                  setServerError("Could not fetch available rides.");
+              }
+          };
+          fetchInitialRides();
       }
-    });
+  }, [isDriverMode, serverStatus, setServerError]);
 
-    // Listen for ride acceptance (for the specific rider)
-    socketRef.current.on('rideAccepted', (acceptedRideId: string) => {
-        if (!isDriverMode && acceptedRideId === userRideRequestId) {
-            const randomDriver = MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
-            const randomVehicle = MOCK_VEHICLES[Math.floor(Math.random() * MOCK_VEHICLES.length)];
-            updateRideDetails({ driver: randomDriver, vehicle: randomVehicle });
-            if (rideDetails.pickup) {
-                const driverStartPos = { lat: rideDetails.pickup.lat + 0.005, lng: rideDetails.pickup.lng + 0.005 };
-                setDriverLocation(driverStartPos);
-            }
-            setAppState(AppState.DRIVER_EN_ROUTE);
-        }
-    });
-
-    // Listen for updates to the ride list (e.g., a ride was accepted or cancelled)
-    socketRef.current.on('rideListUpdate', (updatedRides: RideRequest[]) => {
-      if (isDriverMode) {
-        setAvailableRides(updatedRides);
-      }
-    });
-
-
-    // Cleanup on component unmount
-    return () => {
-        socketRef.current?.disconnect();
-    };
-  }, [isDriverMode, userRideRequestId, rideDetails.pickup, updateRideDetails]);
-
-
-  // Initial fetch for drivers when they switch to driver mode
-  useEffect(() => {
-    if (isDriverMode && appState !== AppState.DRIVER_EN_ROUTE && appState !== AppState.IN_PROGRESS) {
-      fetchAvailableRides();
-    }
-  }, [isDriverMode, appState]);
-  
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
   };
@@ -291,40 +329,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const calculateRouteDetails = useCallback(async (pickup: LatLng, dropoff: LatLng, rideOption: RideOption) => {
     setAppState(AppState.CALCULATING);
-    
     const service = getDirectionsService();
     if (!service || !window.google) {
-        console.error("Google Maps API not loaded.");
-        setServerError("Could not connect to mapping service. Check your API key and internet connection.");
+        setServerError("Google Maps API not loaded. Cannot calculate route.");
         setAppState(AppState.IDLE);
         return;
     }
-
     try {
         const response = await service.route({
             origin: pickup,
             destination: dropoff,
             travelMode: google.maps.TravelMode.DRIVING,
         });
-
         if (response.routes && response.routes.length > 0) {
             const route = response.routes[0];
             const leg = route.legs[0];
-
             if (leg.distance && leg.duration) {
                 const distanceKm = leg.distance.value / 1000;
                 const travelTimeMinutes = leg.duration.value / 60;
                 const suggestedFare = distanceKm * BASE_RATE_PER_KM * rideOption.multiplier;
-
                 updateRideDetails({
                     distanceInKm: parseFloat(distanceKm.toFixed(1)),
                     travelTimeInMinutes: Math.round(travelTimeMinutes),
                     suggestedFare: parseFloat(suggestedFare.toFixed(2)),
                 });
-                
                 const routeCoords = route.overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
                 setRouteCoordinates(routeCoords);
-
                 setAppState(AppState.IDLE);
                 setIsPanelMinimized(false);
             } else {
@@ -335,12 +365,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     } catch (error: any) {
         console.error("Error calculating route details:", error);
-        
-        let errorMessage = "Failed to calculate route. Please check addresses and try again.";
+        let errorMessage = "Google failed to calculate route. Please check addresses and try again.";
         if (error.code === google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
-            errorMessage = "We are experiencing high traffic right now. Please try again in a moment.";
+            errorMessage = "Google Maps traffic is high. Please try again in a moment.";
         }
-
         setServerError(errorMessage);
         updateRideDetails({
             distanceInKm: 0,
@@ -369,8 +397,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       suggestedFare: 0,
       finalFare: 0
     });
+    setPickupQuery(address || '');
     setSelectionMode('dropoff');
-
     if (currentDropoff) {
         calculateRouteDetails(latlng, currentDropoff, rideDetails.rideOption);
     }
@@ -378,251 +406,267 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleSetDropoff = useCallback((latlng: LatLng, address: string | null) => {
     updateRideDetails({ dropoff: latlng, dropoffAddress: address });
+    setDropoffQuery(address || '');
     setSelectionMode(null);
-
     if (rideDetails.pickup) {
         calculateRouteDetails(rideDetails.pickup, latlng, rideDetails.rideOption);
     }
   }, [rideDetails.pickup, rideDetails.rideOption, calculateRouteDetails, updateRideDetails]);
 
-  const handleLocationSelect = useCallback((latlng: LatLng, address: string | null) => {
-    if (!selectionMode) return;
-    
-    const currentSelectionMode = selectionMode;
+  const handleLocationSelect = useCallback(async (latlng: LatLng, address: string | null, forceMode?: SelectionMode) => {
+    const currentSelectionMode = forceMode || selectionMode;
+    if (!currentSelectionMode) return;
 
-    if (address === null) {
+    let finalAddress = address;
+
+    if (finalAddress === null) {
         const tempAddress = t('fetching_address', language);
-        if (currentSelectionMode === 'pickup') {
-            handleSetPickup(latlng, tempAddress);
-        } else {
-            handleSetDropoff(latlng, tempAddress);
-        }
+        if (currentSelectionMode === 'pickup') setPickupQuery(tempAddress);
+        else setDropoffQuery(tempAddress);
 
-        reverseGeocode(latlng, language).then(realAddress => {
-            if (currentSelectionMode === 'pickup') {
-                updateRideDetails({ pickupAddress: realAddress });
-            } else {
-                updateRideDetails({ dropoffAddress: realAddress });
-            }
-        });
-    } else { 
-        if (currentSelectionMode === 'pickup') {
-            handleSetPickup(latlng, address);
-        } else {
-            handleSetDropoff(latlng, address);
+        try {
+            setServerError(null);
+            finalAddress = await reverseGeocode(latlng, language);
+        } catch (error) {
+            console.error("Reverse geocode failed:", error);
+            setServerError(t('error_reverse_geocode_failed', language));
+            if (currentSelectionMode === 'pickup') setPickupQuery('');
+            else setDropoffQuery('');
+            return;
         }
     }
-  }, [selectionMode, language, handleSetPickup, handleSetDropoff, reverseGeocode, updateRideDetails]);
-
-  const handleReset = useCallback((returnToBooking = true) => {
-      setAppState(AppState.IDLE);
-      setRideDetails({
-        pickup: null,
-        dropoff: null,
-        pickupAddress: null,
-        dropoffAddress: null,
-        rideOption: rideOptions[0],
-        suggestedFare: 0,
-        finalFare: 0,
-      });
-      setRouteCoordinates(null);
-      setDriverRouteCoordinates(null);
-      setSelectionMode(null);
-      setIsPanelMinimized(true);
-      setTripProgress(0);
-      setDriverLocation(null);
-      setUserRideRequestId(null);
-      currentRideRequestRef.current = null;
-      setIsChatVisible(false);
-      setChatHistory([]);
-      setCallDetails({ status: CallStatus.NONE, type: 'voice', caller: 'rider' });
-  }, [rideOptions]);
-
-  const handleBookingSubmit = useCallback(async (rideOption: RideOption, offeredFare: number, charityId: string) => {
-    if (serverError) setServerError(null);
-    const selectedCharity = charities.find(c => c.id === charityId);
-
-    const newRideRequest: Omit<RideRequest, 'id'> = {
-        ...rideDetails,
-        rideOption,
-        finalFare: offeredFare,
-        charity: selectedCharity,
-    };
     
-    try {
-        const response = await fetch(`${API_BASE_URL}/rides`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newRideRequest),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to create ride request.');
-        }
-
-        const savedRide: RideRequest = await response.json();
-        setUserRideRequestId(savedRide.id);
-        if(socketRef.current) {
-          socketRef.current.emit('joinRideRoom', savedRide.id);
-        }
-        updateRideDetails({ finalFare: offeredFare, charity: selectedCharity });
-        setAppState(AppState.AWAITING_DRIVER);
-    } catch (error: any) {
-        console.error("Error submitting ride request:", error);
-        setServerError(`Submission failed: ${error.message}`);
+    if (currentSelectionMode === 'pickup') {
+        handleSetPickup(latlng, finalAddress);
+    } else {
+        handleSetDropoff(latlng, finalAddress);
     }
-  }, [rideDetails, charities, serverError, updateRideDetails]);
-  
-  const handleCancelRequest = useCallback(async () => {
+  }, [selectionMode, language, handleSetPickup, handleSetDropoff, reverseGeocode, setServerError]);
+
+  const handleReset = useCallback(async (returnToBooking = false) => {
     if (userRideRequestId) {
         try {
-            await fetch(`${API_BASE_URL}/rides/${userRideRequestId}`, {
-                method: 'DELETE',
-            });
-            // The server will emit an event to notify drivers, so no need for client-side emission
+            const response = await fetch(`${API_BASE_URL}/api/rides/${userRideRequestId}`, { method: 'DELETE' });
+            if (response.ok) {
+                socketRef.current?.emit('ride-cancelled', { rideId: userRideRequestId });
+            }
         } catch (error) {
-            console.error("Failed to cancel ride on server:", error);
+            console.error("Failed to cancel ride request:", error);
         }
+        setUserRideRequestId(null);
     }
-    handleReset();
-  }, [userRideRequestId, handleReset]);
-  
-  const handleToggleDriverMode = useCallback(() => {
-    handleReset();
-    setIsDriverMode(prev => !prev);
-  }, [handleReset]);
+    
+    currentRideRequestRef.current = null;
+    setDriverLocation(null);
+    setIsPanelMinimized(true);
+    setIsTripPanelMinimized(true);
+    setSelectionMode(null);
+    setRouteCoordinates(null);
+    setDriverRouteCoordinates(null);
+    setTripProgress(0);
+    setIsChatVisible(false);
+    setChatHistory([]);
+    setCallDetails({ status: CallStatus.NONE, type: 'voice', caller: 'rider' });
+    
+    setPickupQuery('');
+    setDropoffQuery('');
 
-  const handleAcceptRide = useCallback(async (rideId: string) => {
+    if (returnToBooking && rideDetails.pickup) {
+        updateRideDetails({
+          dropoff: null,
+          dropoffAddress: null,
+          suggestedFare: 0,
+          finalFare: 0,
+          distanceInKm: 0,
+          travelTimeInMinutes: 0,
+          driver: undefined,
+          vehicle: undefined,
+          charity: undefined,
+        });
+        setAppState(AppState.IDLE);
+    } else {
+        setRideDetails({
+          pickup: null,
+          dropoff: null,
+          pickupAddress: null,
+          dropoffAddress: null,
+          rideOption: rideOptions[0],
+          suggestedFare: 0,
+          finalFare: 0,
+          distanceInKm: 0,
+          travelTimeInMinutes: 0,
+          driver: undefined,
+          vehicle: undefined,
+          charity: undefined,
+        });
+        setAppState(AppState.IDLE);
+    }
+  }, [rideOptions, rideDetails.pickup, userRideRequestId, updateRideDetails]);
+
+  const handleBookingSubmit = async (rideOption: RideOption, offeredFare: number, charityId: string) => {
+    setChatHistory([]);
+    setIsChatVisible(false);
+    setCallDetails({ status: CallStatus.NONE, type: 'voice', caller: 'rider' });
+    const selectedCharity = charities.find(c => c.id === charityId);
+    const rideDataForServer = { ...rideDetails, rideOption, finalFare: offeredFare, charity: selectedCharity };
+    updateRideDetails({ rideOption, finalFare: offeredFare, charity: selectedCharity });
     try {
-        const response = await fetch(`${API_BASE_URL}/rides/${rideId}/accept`, {
+        setServerError(null);
+        const response = await fetch(`${API_BASE_URL}/api/rides`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rideDataForServer),
         });
         if (!response.ok) {
-            throw new Error('Failed to accept ride.');
+            const errorBody = await response.json().catch(() => ({ message: 'Failed to create ride request.' }));
+            throw new Error(errorBody.message || `Server Error: ${response.status}`);
         }
-        
-        const acceptedRide = availableRides.find(r => r.id === rideId);
-        if (acceptedRide) {
-            currentRideRequestRef.current = acceptedRide;
-            updateRideDetails({ ...acceptedRide });
-            if (acceptedRide.pickup) {
-              const driverStartPos = { lat: acceptedRide.pickup.lat + 0.005, lng: acceptedRide.pickup.lng + 0.005 };
-              setDriverLocation(driverStartPos);
-            }
-            setAppState(AppState.DRIVER_EN_ROUTE);
-        }
+        const createdRide: RideRequest = await response.json();
+        setUserRideRequestId(createdRide.id);
+        currentRideRequestRef.current = createdRide;
+        socketRef.current?.emit('new-ride', createdRide);
+        setIsPanelMinimized(true);
+        setAppState(AppState.AWAITING_DRIVER);
     } catch (error) {
-        console.error("Error accepting ride:", error);
-        setServerError("Could not accept the ride. It may have been taken by another driver.");
+        console.error("Error creating ride request:", error);
+        if (error instanceof Error && error.message.includes('Failed to fetch')) {
+             setServerError("Could not connect to the server. Please ensure it's running and try again.");
+        } else {
+             setServerError(error instanceof Error ? error.message : "An unknown error occurred.");
+        }
     }
-  }, [availableRides, updateRideDetails]);
-
+  };
+  
+  const handleCancelRequest = () => {
+      handleReset(true);
+  };
+  
   const handleDriverArrived = useCallback(() => {
+    setDriverLocation(null);
+    setDriverRouteCoordinates(null);
+    setIsTripPanelMinimized(true);
     setAppState(AppState.IN_PROGRESS);
   }, []);
 
+  const handleToggleDriverMode = () => {
+      handleReset();
+      setServerError(null);
+      setIsDriverMode(prev => !prev);
+  };
+
+  const handleAcceptRide = async (rideId: string) => {
+      const rideToAccept = availableRides.find(r => r.id === rideId);
+      if (!rideToAccept || !rideToAccept.pickup) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/rides/${rideId}/accept`, { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to accept ride');
+        
+        // As the driver, we've accepted. Join the chat room.
+        socketRef.current?.emit('join-ride-room', rideId);
+        
+        const randomDriver = MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)];
+        const randomVehicle = MOCK_VEHICLES[Math.floor(Math.random() * MOCK_VEHICLES.length)];
+        const acceptedRideDetails: RideRequest = { ...rideToAccept, driver: randomDriver, vehicle: randomVehicle };
+        
+        setRideDetails(acceptedRideDetails);
+        currentRideRequestRef.current = acceptedRideDetails;
+        socketRef.current?.emit('accept-ride', acceptedRideDetails);
+        
+        const driverStartPos = { lat: rideToAccept.pickup.lat + 0.005, lng: rideToAccept.pickup.lng + 0.005 };
+        setDriverLocation(driverStartPos);
+        setAppState(AppState.DRIVER_EN_ROUTE);
+      } catch (error) {
+          console.error("Error accepting ride:", error);
+          setServerError("Failed to accept the ride. It may have been taken by another driver.");
+      }
+  };
+
   const handleTripComplete = useCallback(() => {
-    setAppState(AppState.PAYMENT_PENDING);
     setIsPanelMinimized(false);
     setIsTripPanelMinimized(true);
+    setAppState(AppState.PAYMENT_PENDING);
   }, []);
-  
-  const handleConfirmPayment = useCallback(async () => {
+
+  const handleConfirmPayment = () => {
     setAppState(AppState.VERIFYING_PAYMENT);
-    const msg = await getConfirmationMessage(rideDetails.finalFare, language);
-    setConfirmationMessage(msg);
-    // Simulate payment verification delay
     setTimeout(() => {
-      // In a real app, you'd handle this after a webhook from the payment provider
-      if (isDriverMode && currentRideRequestRef.current) {
-          handleReset(); // Driver goes back to dashboard
-      } else {
-          setAppState(AppState.CONFIRMED); // Rider sees confirmation
-      }
-    }, 2000);
-  }, [rideDetails.finalFare, language, isDriverMode, handleReset]);
+        setAppState(AppState.CONFIRMED);
+        setTimeout(() => handleReset(), 3000);
+    }, 2500);
+  };
 
-  const handleRecenterMap = useCallback(() => {
+  const handleRecenterMap = () => {
     setRecenterMapTimestamp(Date.now());
-  }, []);
-
-  const toggleChat = useCallback(() => setIsChatVisible(prev => !prev), []);
-  
-  const sendMessage = useCallback((text: string) => {
-    const sender = isDriverMode ? 'driver' : 'rider';
-    const newMessage: ChatMessage = {
-        id: Date.now().toString(),
-        sender,
-        text,
-        timestamp: new Date().toISOString()
-    };
-    setChatHistory(prev => [...prev, newMessage]);
-    // Simulate a reply
-    setTimeout(() => {
-        const reply: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            sender: sender === 'rider' ? 'driver' : 'rider',
-            text: "Ok, I'm on my way.",
-            timestamp: new Date().toISOString()
-        };
-        setChatHistory(prev => [...prev, reply]);
-    }, 1500);
-  }, [isDriverMode]);
-  
-  const initiateCall = useCallback((type: 'voice' | 'video') => {
-    setCallDetails({ status: CallStatus.RINGING, type, caller: isDriverMode ? 'driver' : 'rider' });
-    // Simulate call being answered
-    setTimeout(() => {
-        if (callDetails.status === CallStatus.RINGING) { // Check if call wasn't cancelled
-            setCallDetails(prev => ({ ...prev, status: CallStatus.ACTIVE }));
-        }
-    }, 4000);
-  }, [isDriverMode, callDetails.status]);
-
-  const answerCall = useCallback(() => {
-    setCallDetails(prev => ({ ...prev, status: CallStatus.ACTIVE }));
-  }, []);
-  
-  const endCall = useCallback(() => {
-    setCallDetails({ status: CallStatus.NONE, type: 'voice', caller: 'rider' });
-  }, []);
+  };
   
   const handleTestConnection = useCallback(async () => {
-    setIsTestingConnection(true);
-    setServerError(null);
-    try {
-        const response = await fetch(`${API_BASE_URL}/health`);
-        if (!response.ok) {
-            throw new Error(`Server returned status ${response.status}`);
-        }
-        // If successful, the error will be cleared. No success message needed here.
-    } catch (error: any) {
-        setServerError(`Connection failed. The server is offline or unreachable.`);
-    } finally {
-        setIsTestingConnection(false);
-    }
-  }, []);
+      setIsTestingConnection(true);
+      setServerError('Testing connection...');
+      await checkServerStatus();
+      setIsTestingConnection(false);
+  }, [checkServerStatus, setServerError]);
 
-  const contextValue = {
-    appState, setAppState,
-    selectionMode, setSelectionMode,
-    isPanelMinimized, setIsPanelMinimized,
-    isTripPanelMinimized, setIsTripPanelMinimized,
-    language, setLanguage,
-    rideDetails, updateRideDetails,
+  const toggleChat = () => {
+    setIsChatVisible(prev => !prev);
+  };
+
+  const sendMessage = (text: string) => {
+    const rideId = currentRideRequestRef.current?.id;
+    if (!rideId) return;
+    const newMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      sender: isDriverMode ? 'driver' : 'rider',
+      text,
+      timestamp: new Date().toISOString(),
+    };
+    socketRef.current?.emit('send-message', { rideId, message: newMessage });
+  };
+
+  const initiateCall = (type: 'voice' | 'video') => {
+    const caller = isDriverMode ? 'driver' : 'rider';
+    setCallDetails({ status: CallStatus.RINGING, type, caller });
+    setIsChatVisible(false);
+    setTimeout(() => {
+      setCallDetails(prev => {
+        if (prev.status === CallStatus.RINGING) {
+          return { ...prev, status: CallStatus.ACTIVE };
+        }
+        return prev;
+      });
+    }, 3000);
+  };
+  
+  const answerCall = () => {
+    setCallDetails(prev => ({ ...prev, status: CallStatus.ACTIVE }));
+  };
+  
+  const endCall = () => {
+    setCallDetails({ status: CallStatus.NONE, type: 'voice', caller: 'rider' });
+  };
+
+  const value: AppContextType = {
+    appState,
+    setAppState,
+    selectionMode,
+    setSelectionMode,
+    isPanelMinimized,
+    setIsPanelMinimized,
+    isTripPanelMinimized,
+    setIsTripPanelMinimized,
+    language,
+    setLanguage,
+    rideDetails,
+    updateRideDetails,
     rideOptions,
     charities,
     confirmationMessage,
-    routeCoordinates, setRouteCoordinates,
-    driverRouteCoordinates, setDriverRouteCoordinates,
-    tripProgress, setTripProgress,
+    routeCoordinates,
+    setRouteCoordinates,
+    driverRouteCoordinates,
+    setDriverRouteCoordinates,
+    tripProgress,
+    setTripProgress,
     driverLocation,
-    isDriverMode,
-    availableRides,
-    handleToggleDriverMode,
-    handleAcceptRide,
-    handleCancelRequest,
     handleBookingSubmit,
     handleTripComplete,
     handleReset,
@@ -631,18 +675,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     handleSetDropoff,
     handleFocusLocationInput,
     handleStartBooking,
+    isDriverMode,
+    availableRides,
+    handleToggleDriverMode,
+    handleAcceptRide,
+    handleCancelRequest,
     handleRecenterMap,
     recenterMapTimestamp,
     handleDriverArrived,
     calculateRouteDetails,
     handleConfirmPayment,
-    isChatVisible, toggleChat,
-    chatHistory, sendMessage,
-    callDetails, initiateCall, answerCall, endCall,
-    serverError, setServerError,
-    isTestingConnection, handleTestConnection,
-    isMapsApiLoaded,
+    isChatVisible,
+    toggleChat,
+    chatHistory,
+    sendMessage,
+    callDetails,
+    initiateCall,
+    answerCall,
+    endCall,
+    serverError,
+    setServerError,
+    isTestingConnection,
+    handleTestConnection,
+    serverStatus,
+    checkServerStatus,
+    pickupQuery,
+    setPickupQuery,
+    dropoffQuery,
+    setDropoffQuery,
   };
+<<<<<<< HEAD
   return (
     <AppContext.Provider value={contextValue}>
       {children}
@@ -661,3 +723,8 @@ export const useAppContext = () => {
   return context;
 };
 
+=======
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+};
+>>>>>>> d19edb3 (Finalize all changes before rebase)

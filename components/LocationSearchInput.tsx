@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocationService } from '../hooks/useLocationService';
 import { LatLng } from '../types';
 import { useAppContext } from '../hooks/useAppContext';
@@ -9,70 +9,68 @@ const SearchSpinner = () => (
 );
 
 const GpsIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
 );
 
-// Debounce utility
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
-    const debounced = (...args: Parameters<F>): Promise<ReturnType<F>> =>
-        new Promise(resolve => {
-            if (timeout) {
-                clearTimeout(timeout);
-            }
-            timeout = setTimeout(() => resolve(func(...args)), waitFor);
-        });
+    const debounced = (...args: Parameters<F>): void => {
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        timeout = setTimeout(() => func(...args), waitFor);
+    };
     
     return debounced;
 }
 
 interface LocationSearchInputProps {
     mode: 'pickup' | 'dropoff';
-    initialValue: string | null;
+    query: string;
+    onQueryChange: (query: string) => void;
     onLocationSelect: (latlng: LatLng, address: string) => void;
 }
 
-const LocationSearchInput: React.FC<LocationSearchInputProps> = ({ mode, initialValue, onLocationSelect }) => {
+const LocationSearchInput: React.FC<LocationSearchInputProps> = ({ mode, query, onQueryChange, onLocationSelect }) => {
     const { language, handleStartBooking, setServerError } = useAppContext();
     const { locateUser, searchLocations } = useLocationService();
-    const [query, setQuery] = useState(initialValue || '');
-    const [suggestions, setSuggestions] = useState<{ lat: number; lng: number; address: string }[]>([]);
+    const [suggestions, setSuggestions] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-
-    // Update query if initialValue changes from context
-    useEffect(() => {
-        setQuery(initialValue || '');
-    }, [initialValue]);
     
-    // Debounced search function
-    const debouncedSearch = useCallback(debounce(async (searchQuery: string) => {
-        if (searchQuery.length < 3) {
-            setSuggestions([]);
-            return;
-        }
-        setIsSearching(true);
-        const results = await searchLocations(searchQuery, language);
-        setSuggestions(results);
-        setIsSearching(false);
-    }, 500), [searchLocations, language]);
+    const debouncedSearch = useMemo(() => 
+        debounce(async (searchQuery: string) => {
+            setIsSearching(true);
+            try {
+                setServerError(null);
+                const results = await searchLocations(searchQuery);
+                setSuggestions(results);
+            } catch (error) {
+                console.error("Search failed:", error);
+                const errorMessage = error instanceof Error ? error.message : t('error_search_failed', language);
+                setServerError(errorMessage);
+                setSuggestions([]);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 500), 
+    [searchLocations, language, setServerError]);
 
     useEffect(() => {
-        // Prevent searching for the fallback coordinate string to break the infinite loop
-        if (query.startsWith('Lat:')) {
+        const fetchingAddressText = t('fetching_address', language);
+        if (!query || query.length < 3 || query === fetchingAddressText) {
             setSuggestions([]);
             return;
         }
         debouncedSearch(query);
-    }, [query, debouncedSearch]);
+    }, [query, debouncedSearch, language]);
 
-    // Handle clicks outside the component to close suggestions
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -85,27 +83,26 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({ mode, initial
 
     const handleUseCurrentLocation = () => {
         setIsLocating(true);
-        setServerError(null); // Clear previous errors
+        setServerError(null);
         locateUser(
             language,
             (latlng, address) => {
                 onLocationSelect(latlng, address || '');
-                setQuery(address || `Lat: ${latlng.lat.toFixed(3)}, Lng: ${latlng.lng.toFixed(3)}`);
                 setIsLocating(false);
                 setIsFocused(false);
             },
             (error) => {
-                setServerError(error); // Show error in the main UI
+                setServerError(error);
                 setIsLocating(false);
             }
         );
     };
 
     const handleSelectSuggestion = (suggestion: { lat: number; lng: number; address: string }) => {
-        onLocationSelect({ lat: suggestion.lat, lng: suggestion.lng }, suggestion.address);
-        setQuery(suggestion.address);
+        onQueryChange(suggestion.address);
         setSuggestions([]);
         setIsFocused(false);
+        onLocationSelect({ lat: suggestion.lat, lng: suggestion.lng }, suggestion.address);
     };
     
     const handleFocus = () => {
@@ -124,7 +121,7 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({ mode, initial
                     <input
                         type="text"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => onQueryChange(e.target.value)}
                         onFocus={handleFocus}
                         placeholder={placeholder}
                         className="w-full bg-transparent text-white text-sm placeholder-gray-400 focus:outline-none"
@@ -147,7 +144,7 @@ const LocationSearchInput: React.FC<LocationSearchInputProps> = ({ mode, initial
                 <ul className="absolute top-full left-0 right-0 mt-2 bg-[#1E1B3A] border border-gray-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
                     {suggestions.map((s, index) => (
                         <li 
-                            key={index}
+                            key={`${s.lat}-${index}`}
                             onClick={() => handleSelectSuggestion(s)}
                             className="px-4 py-2 text-sm text-gray-300 hover:bg-indigo-900/50 cursor-pointer"
                         >

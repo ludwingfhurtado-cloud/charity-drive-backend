@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Charity Drive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!--
+    ================================================================================
+    === PRODUCTION-READY GOOGLE MAPS SETUP CHECKLIST (LOCAL DEVELOPMENT) ===
+    ================================================================================
+    To run this application locally, you must complete the following two steps.
+    This is the secure and standard way to handle API keys.
+
+    --- STEP 1: CREATE YOUR .env FILE ---
+    1. In the main project folder (the same folder as this index.html file),
+       create a new file named exactly: .env
+    2. Open the .env file and add the following line, replacing the key with
+       the one from your Google Cloud Console.
+    
+       VITE_GOOGLE_MAPS_API_KEY=AIzaSyCNkeZTHvkzH9LgL9hEFr9chFrDQzYTog
+
+    --- STEP 2: CONFIGURE YOUR GOOGLE CLOUD PROJECT ---
+    The "This page can't load Google Maps correctly" error is a configuration
+    issue in your Google Cloud account. To fix it, you MUST do the following:
+
+    1. ENABLE BILLING:
+       - Go to https://console.cloud.google.com/billing
+       - Make sure your "CHARITY DRIVE" project is linked to an active billing account.
+         This is required by Google, even for the free tier.
+
+    2. ENABLE THE 3 REQUIRED APIs:
+       - Go to https://console.cloud.google.com/apis/library
+       - Search for and ENABLE each of these APIs one by one:
+         - Maps JavaScript API
+         - Routes API
+         - Places API
+
+    3. REMOVE KEY RESTRICTIONS (for local testing):
+       - Go to https://console.cloud.google.com/apis/credentials
+       - Click on the name of your API key.
+       - Under "Application restrictions", select "None" and save.
+
+    --- STEP 3: RESTART YOUR SERVER ---
+    After creating/changing your .env file, you MUST stop your dev server
+    (Ctrl+C in PowerShell) and restart it with `npm run dev`.
+    ================================================================================
+    -->
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
+    "vite": "https://aistudiocdn.com/vite@^7.1.8",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/vitejs/plugin-react@^5.0.4",
+    "socket.io-client": "https://aistudiocdn.com/socket.io-client@^4.8.1"
+  }
+}
+</script>
+  <style>
+    /* Custom animation for smooth fade-in effect */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+  </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-900">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

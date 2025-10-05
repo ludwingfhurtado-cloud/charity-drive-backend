@@ -1,20 +1,37 @@
 {
-  "name": "my-charity-app-server",
-  "version": "1.0.0",
-  "description": "Backend server for the Charity Drive application.",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "mongoose": "^7.0.3",
-    "node-fetch": "^2.6.7",
-    "socket.io": "^4.8.1"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  }
+    "name": "renewed-charity-drive",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Full Charity Drive application (frontend + backend).",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "start": "node server/server.js"
+    },
+    "dependencies": {
+        "@google/genai": "^1.20.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.1.0",
+        "mongoose": "^7.0.3",
+        "node-fetch": "^2.6.7",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+        "socket.io": "^4.8.1",
+        "socket.io-client": "^4.7.5"
+    },
+    "devDependencies": {
+        "@types/google.maps": "^3.58.1",
+        "@types/node": "^22.14.0",
+        "@types/react": "^19.2.0",
+        "@types/react-dom": "^19.2.0",
+        "@vitejs/plugin-react": "^5.0.0",
+        "typescript": "~5.8.2",
+        "vite": "^6.2.0"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
 }

@@ -1,21 +1,26 @@
 /**
  * AppContext.tsx
- * -----------------
- * Global application context for CharityDrive.
- * Handles booking flow, map state, driver mode, chat/call logic, and app-wide settings.
+ * -------------------------------------------------------
+ * Global context for CharityDrive – handles driver/rider flow,
+ * chat, calls, and live location sharing via Socket.IO.
+ * -------------------------------------------------------
  */
 
 import React, {
   createContext,
   useState,
+  useEffect,
   useCallback,
-  useContext,
   useRef,
   ReactNode,
+  useContext,
 } from "react";
+import io, { Socket } from "socket.io-client";
+import { useLocationService } from "../hooks/useLocationService";
+import { LatLng } from "../types";
 
 /* ============================================================
-   📍 ENUMS & TYPES
+   ENUMS & INTERFACES
 ============================================================ */
 
 export enum AppState {
@@ -37,11 +42,7 @@ export enum CallStatus {
   NONE = "NONE",
   RINGING = "RINGING",
   ACTIVE = "ACTIVE",
-}
-
-export interface LatLng {
-  lat: number;
-  lng: number;
+  ENDED = "ENDED",
 }
 
 export interface RideRequest {
@@ -61,13 +62,19 @@ export interface RideRequest {
 
 export interface ChatMessage {
   id: string;
-  sender: "driver" | "rider";
+  sender: "driver" | "rider" | "relative";
   text: string;
   timestamp: string;
 }
 
+export interface SharedLocation {
+  active: boolean;
+  link?: string;
+  lastUpdate?: LatLng | null;
+}
+
 /* ============================================================
-   🧠 CONTEXT INTERFACE
+   CONTEXT TYPE
 ============================================================ */
 
 interface AppContextType {
@@ -78,12 +85,10 @@ interface AppContextType {
   rideDetails: RideRequest;
   updateRideDetails: (details: Partial<RideRequest>) => void;
 
-  // Booking & driver
-  handleStartBooking: (mode: SelectionMode) => void;
-  handleReset: () => void;
-  handleAcceptRide: (id: string) => void;
-  handleToggleDriverMode: () => void;
+  // Driver
   isDriverMode: boolean;
+  handleToggleDriverMode: () => void;
+  handleAcceptRide: (id: string) => void;
 
   // Chat
   chatHistory: ChatMessage[];
@@ -95,67 +100,80 @@ interface AppContextType {
   callStatus: CallStatus;
   startCall: () => void;
   endCall: () => void;
+
+  // Live Location Sharing
+  sharedLocation: SharedLocation;
+  startSharingLocation: () => void;
+  stopSharingLocation: () => void;
+
+  // Panic alert placeholder
+  triggerPanicAlert: (reason?: string) => void;
 }
 
 /* ============================================================
-   🏁 DEFAULT VALUES
+   PROVIDER IMPLEMENTATION
 ============================================================ */
-
-const defaultRide: RideRequest = {
-  pickup: null,
-  dropoff: null,
-  pickupAddress: null,
-  dropoffAddress: null,
-  suggestedFare: 0,
-  finalFare: 0,
-  distanceInKm: 0,
-  travelTimeInMinutes: 0,
-};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-/* ============================================================
-   🧩 PROVIDER IMPLEMENTATION
-============================================================ */
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>(SelectionMode.NONE);
-  const [rideDetails, setRideDetails] = useState<RideRequest>(defaultRide);
+  const [rideDetails, setRideDetails] = useState<RideRequest>({});
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.NONE);
-  const rideRef = useRef<RideRequest | null>(null);
+  const [sharedLocation, setSharedLocation] = useState<SharedLocation>({ active: false });
+  const socketRef = useRef<Socket | null>(null);
+
+  const { locateUser } = useLocationService();
 
   /* --------------------------
-     Booking & Map Handlers
+     SOCKET.IO CONNECTION
+  -------------------------- */
+  useEffect(() => {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+    const socket = io(socketUrl, { transports: ["websocket"], reconnection: true });
+    socketRef.current = socket;
+
+    socket.on("connect", () => console.log("🟢 Socket connected:", socket.id));
+    socket.on("disconnect", () => console.warn("🔴 Socket disconnected"));
+
+    // Receive chat
+    socket.on("chatMessage", (msg: ChatMessage) => {
+      setChatHistory((prev) => [...prev, msg]);
+    });
+
+    // Receive location updates
+    socket.on("locationUpdate", (coords: LatLng) => {
+      if (sharedLocation.active) {
+        setSharedLocation((prev) => ({ ...prev, lastUpdate: coords }));
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [sharedLocation.active]);
+
+  /* --------------------------
+     CORE HANDLERS
   -------------------------- */
   const updateRideDetails = useCallback((details: Partial<RideRequest>) => {
     setRideDetails((prev) => ({ ...prev, ...details }));
   }, []);
 
-  const handleStartBooking = (mode: SelectionMode) => {
-    setSelectionMode(mode);
-    setAppState(AppState.SEARCHING);
-  };
-
-  const handleReset = () => {
-    setAppState(AppState.IDLE);
-    setRideDetails(defaultRide);
-    setChatHistory([]);
-    setCallStatus(CallStatus.NONE);
-  };
-
   const handleToggleDriverMode = () => setIsDriverMode((p) => !p);
 
   const handleAcceptRide = (id: string) => {
-    console.log(`✅ Driver accepted ride ${id}`);
+    console.log("✅ Driver accepted ride", id);
     setAppState(AppState.DRIVER_EN_ROUTE);
+    socketRef.current?.emit("driverAccepted", { rideId: id });
   };
 
   /* --------------------------
-     Chat & Call Handlers
+     CHAT HANDLERS
   -------------------------- */
   const sendMessage = (text: string) => {
     const msg: ChatMessage = {
@@ -165,23 +183,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       timestamp: new Date().toISOString(),
     };
     setChatHistory((prev) => [...prev, msg]);
+    socketRef.current?.emit("chatMessage", msg);
   };
 
   const toggleChat = () => setIsChatVisible((p) => !p);
 
+  /* --------------------------
+     CALL HANDLERS
+  -------------------------- */
   const startCall = () => {
     setCallStatus(CallStatus.RINGING);
-    console.log("📞 Call started...");
-    setTimeout(() => setCallStatus(CallStatus.ACTIVE), 3000);
+    console.log("📞 Initiating call...");
+    setTimeout(() => setCallStatus(CallStatus.ACTIVE), 2500);
   };
 
   const endCall = () => {
-    console.log("📴 Call ended.");
-    setCallStatus(CallStatus.NONE);
+    setCallStatus(CallStatus.ENDED);
+    console.log("📴 Call ended");
+    setTimeout(() => setCallStatus(CallStatus.NONE), 1500);
   };
 
   /* --------------------------
-     Context Value
+     LIVE LOCATION SHARING
+  -------------------------- */
+  const startSharingLocation = () => {
+    locateUser("en", (latlng) => {
+      setSharedLocation({
+        active: true,
+        lastUpdate: latlng,
+        link: `${window.location.origin}/share/${socketRef.current?.id}`,
+      });
+      socketRef.current?.emit("shareLocation", { latlng });
+      console.log("📍 Live location sharing started");
+    }, console.error);
+  };
+
+  const stopSharingLocation = () => {
+    setSharedLocation({ active: false });
+    socketRef.current?.emit("stopShareLocation");
+    console.log("📍 Live location sharing stopped");
+  };
+
+  /* --------------------------
+     PANIC ALERT PLACEHOLDER
+  -------------------------- */
+  const triggerPanicAlert = (reason?: string) => {
+    console.warn("🚨 Panic alert triggered:", reason || "unspecified");
+    locateUser("en", (latlng) => {
+      socketRef.current?.emit("panicAlert", { latlng, reason });
+    }, console.error);
+  };
+
+  /* --------------------------
+     CONTEXT VALUE
   -------------------------- */
   const value: AppContextType = {
     appState,
@@ -190,11 +244,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setSelectionMode,
     rideDetails,
     updateRideDetails,
-    handleStartBooking,
-    handleReset,
-    handleAcceptRide,
-    handleToggleDriverMode,
     isDriverMode,
+    handleToggleDriverMode,
+    handleAcceptRide,
     chatHistory,
     sendMessage,
     isChatVisible,
@@ -202,21 +254,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     callStatus,
     startCall,
     endCall,
+    sharedLocation,
+    startSharingLocation,
+    stopSharingLocation,
+    triggerPanicAlert,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
 /* ============================================================
-   🪶 HOOK
+   HOOK EXPORT
 ============================================================ */
 
 export const useAppContext = (): AppContextType => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error("useAppContext must be used within an AppProvider");
-  }
-  return context;
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useAppContext must be used within an AppProvider");
+  return ctx;
 };
-
+export { AppContext };
 export default AppContext;

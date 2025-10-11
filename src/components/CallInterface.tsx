@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { t } from '../i18n';
-import { CallStatus } from '../types';
+import { t } from '../../i18n';
+import { CallStatus } from '../../types';
 
 const CallInterface: React.FC = () => {
     const { language, callDetails, endCall, answerCall, isDriverMode } = useAppContext();

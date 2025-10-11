@@ -1,8 +1,8 @@
 import React from 'react';
-import { LatLng } from '../types';
-import { t } from '../i18n';
+import { LatLng } from '../../types';
+import { t } from '../../i18n';
 import { useAppContext } from '../hooks/useAppContext';
-import { COMPANY_QR_CODE_IMAGE } from '../assets/images';
+import { COMPANY_QR_CODE_IMAGE } from '../../assets/images';
 
 const formatLocation = (address: string | null, latlng: LatLng | null) => {
     if (address) return address;

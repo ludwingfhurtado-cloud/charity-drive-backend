@@ -1,31 +1,52 @@
 {
   "compilerOptions": {
+    /* === Target & Module === */
     "target": "ES2022",
     "module": "ESNext",
-    "lib": ["ES2022", "DOM"],
-    "allowJs": true,
-    "checkJs": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    /* === React / JSX === */
     "jsx": "react-jsx",
+
+    /* === Module Resolution === */
     "moduleResolution": "bundler",
-    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
-    "strict": true,
-    "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
+
+    /* === Strictness & Safety === */
+    "strict": true,
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+
+    /* === Types & Global Declarations === */
+    "types": ["node", "vite/client", "@types/google.maps"],
+
+    /* === Decorators & JS Support === */
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "allowJs": true,
+
+    /* === Emit Control === */
     "noEmit": true,
+
+    /* === Path Aliases === */
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*"]
     }
   },
+
+  /* === Included Source Files === */
   "include": [
-    "./**/*.ts",
-    "./**/*.tsx"
+    "src",
+    "vite.config.ts",
+    "types.d.ts",
+    "src/types/socket.d.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "coverage"
-  ]
+
+  /* === Excluded Folders === */
+  "exclude": ["node_modules", "dist"]
 }

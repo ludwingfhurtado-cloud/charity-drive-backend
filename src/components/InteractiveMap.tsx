@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { AppState } from '../types';
+import { AppState } from '../../types';
 
 // Define a lightweight LatLng type for type-safety.
 type LatLng = { lat: number; lng: number };

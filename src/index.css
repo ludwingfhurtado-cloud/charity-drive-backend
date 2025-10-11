@@ -1,0 +1,195 @@
+/* ============================================================================
+   🌙 CHARITY DRIVE — GLOBAL STYLES
+   Refined minimalism, luxury-grade finish, built for trust & calm focus.
+   ============================================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------
+   🎨 Core Theme
+------------------------------ */
+
+:root {
+    --color-bg-primary: #0b0f19;
+    --color-bg-secondary: #121826;
+    --color-accent: #00bcd4;
+    --color-accent-light: #5de5ff;
+    --color-text-primary: #e4e8f0;
+    --color-text-secondary: #a0a8b5;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.12);
+}
+
+
+/* ------------------------------
+   🌌 Base Body Styling
+------------------------------ */
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-secondary) 100%);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+
+
+/* ------------------------------
+   ✨ App Container
+------------------------------ */
+
+#root {
+    @apply w-full h-screen flex flex-col items-center justify-center;
+    animation: fadeIn 0.6s ease-out;
+}
+
+
+/* ------------------------------
+   💎 Glass Panels
+------------------------------ */
+
+.glass-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 1rem;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+
+
+/* ------------------------------
+   🌈 Buttons
+------------------------------ */
+
+.btn-primary {
+    background: linear-gradient(90deg, var(--color-accent), var(--color-accent-light));
+    color: #fff;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.75rem;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(90deg, var(--color-accent-light), var(--color-accent));
+    transform: translateY(-2px);
+}
+
+
+/* ------------------------------
+   🔔 Alerts / Notifications
+------------------------------ */
+
+.alert {
+    @apply px-4 py-3 rounded-lg text-sm font-medium flex items-center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.alert-success {
+    border-color: #22c55e;
+    color: #a7f3d0;
+}
+
+.alert-error {
+    border-color: #ef4444;
+    color: #fecaca;
+}
+
+
+/* ------------------------------
+   🌠 Animations
+------------------------------ */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+
+/* ------------------------------
+   🗺️ Map / Loading Overlays
+------------------------------ */
+
+.map-loading {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.9));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+
+/* ------------------------------
+   🧭 Utility Classes
+------------------------------ */
+
+.text-gradient {
+    background: linear-gradient(to right, var(--color-accent-light), var(--color-accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.shadow-glow {
+    box-shadow: 0 0 20px rgba(0, 188, 212, 0.4);
+}
+
+
+/* ------------------------------
+   ⚡ Scrollbar Customization
+------------------------------ */
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-accent);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent-light);
+}

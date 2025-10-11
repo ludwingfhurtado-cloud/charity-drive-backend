@@ -1,31 +1,37 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { AppState, CallStatus } from './types';
-import BookingForm from './components/BookingForm';
-import Confirmation from './components/Confirmation';
-import InteractiveMap from './components/InteractiveMap';
-import LoadingSpinner from './components/LoadingSpinner';
-import TripProgress from './components/TripProgress';
-import { useAppContext } from './hooks/useAppContext';
-import { t } from './i18n';
-import AwaitingDriver from './components/AwaitingDriver';
-import DriverDashboard from './components/DriverDashboard';
-import DriverEnRoute from './components/DriverEnRoute';
-import FloatingLocationBar from './components/FloatingLocationBar';
-import PaymentRequest from './components/PaymentRequest';
-import ChatButton from './components/ChatButton';
-import ChatPanel from './components/ChatPanel';
-import CallInterface from './components/CallInterface';
-import HamburgerMenu from './components/HamburgerMenu';
-import RecenterControl from './components/RecenterControl';
-import LanguageSelector from './components/LanguageSelector';
-import MapErrorOverlay from './components/MapErrorOverlay';
+// ✅ Core Imports
+import React, { useRef, useEffect, useState } from "react";
+import { AppState, CallStatus } from "./types";
 
-const ChevronIcon = ({ isMinimized }: { isMinimized: boolean }) => (
+// ✅ Component Imports
+import BookingForm from "./components/BookingForm";
+import Confirmation from "./components/Confirmation";
+import InteractiveMap from "./components/InteractiveMap";
+import LoadingSpinner from "./components/LoadingSpinner";
+import TripProgress from "./components/TripProgress";
+import { t, Language } from "./i18n";
+import AwaitingDriver from "./components/AwaitingDriver";
+import DriverDashboard from "./components/DriverDashboard";
+import DriverEnRoute from "./components/DriverEnRoute";
+import FloatingLocationBar from "./components/FloatingLocationBar";
+import PaymentRequest from "./components/PaymentRequest";
+import ChatButton from "./components/ChatButton";
+import ChatPanel from "./components/ChatPanel";
+import CallInterface from "./components/CallInterface";
+import HamburgerMenu from "./components/HamburgerMenu";
+import RecenterControl from "./components/RecenterControl";
+import LanguageSelector from "./components/LanguageSelector";
+import MapErrorOverlay from "./components/MapErrorOverlay";
+import { useAppContext } from "./contexts/AppContext";
+
+// ✅ Chevron Icon Component
+const ChevronIcon: React.FC<{ isMinimized: boolean }> = ({ isMinimized }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    className={`h-6 w-6 text-gray-400 transition-transform duration-300 ${!isMinimized ? 'rotate-180' : ''}`}
+    className={`h-6 w-6 text-gray-400 transition-transform duration-300 ${
+      !isMinimized ? "rotate-180" : ""
+    }`}
     fill="none"
-    viewBox="0 0 24"
+    viewBox="0 0 24 24"
     stroke="currentColor"
     strokeWidth={2}
   >
@@ -34,10 +40,10 @@ const ChevronIcon = ({ isMinimized }: { isMinimized: boolean }) => (
 );
 
 const App: React.FC = () => {
-  const { 
-    appState, 
-    language, 
-    isPanelMinimized, 
+  const {
+    appState,
+    language,
+    isPanelMinimized,
     setIsPanelMinimized,
     isTripPanelMinimized,
     setIsTripPanelMinimized,
@@ -47,19 +53,19 @@ const App: React.FC = () => {
     callDetails,
     serverError,
   } = useAppContext();
-  
+
   const panelRef = useRef<HTMLDivElement>(null);
   const tripPanelRef = useRef<HTMLDivElement>(null);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(0);
 
+  // Measure bottom panel height to push map UI safely
   useEffect(() => {
     const bottomOffset = 16;
     let newHeight = 0;
 
     const mainPanel = panelRef.current;
     const tripPanel = tripPanelRef.current;
-
-    const collapsedMainPanelHeight = 128; 
+    const collapsedMainPanelHeight = 128;
 
     if (appState === AppState.IN_PROGRESS && tripPanel) {
       newHeight = isTripPanelMinimized ? 72 : tripPanel.offsetHeight + bottomOffset;
@@ -70,13 +76,15 @@ const App: React.FC = () => {
     } else if (appState === AppState.PAYMENT_PENDING && mainPanel) {
       newHeight = mainPanel.offsetHeight + bottomOffset;
     }
-    
+
     setBottomPanelHeight(newHeight);
-  }, [appState, isTripPanelMinimized, isPanelMinimized, isDriverMode, rideDetails, panelRef.current?.offsetHeight, tripPanelRef.current?.offsetHeight]);
+    // We don't include .current?.offsetHeight in deps; React refs don't trigger renders.
+  }, [appState, isTripPanelMinimized, isPanelMinimized, isDriverMode, rideDetails]);
 
-  const handleTogglePanel = () => setIsPanelMinimized(prev => !prev);
-  const handleToggleTripPanel = () => setIsTripPanelMinimized(prev => !prev);
+  const handleTogglePanel = () => setIsPanelMinimized((prev) => !prev);
+  const handleToggleTripPanel = () => setIsTripPanelMinimized((prev) => !prev);
 
+  // ------- Render helpers -------
   const renderRiderContent = () => {
     switch (appState) {
       case AppState.IDLE:
@@ -105,29 +113,36 @@ const App: React.FC = () => {
   };
 
   const getGrabberAriaLabel = () =>
-    t(isPanelMinimized ? 'panel_grabber_expand_aria' : 'panel_grabber_collapse_aria', language);
+    t(
+      isPanelMinimized ? "panel_grabber_expand_aria" : "panel_grabber_collapse_aria",
+      language as Language
+    );
 
   const getTripGrabberAriaLabel = () =>
-    t(isTripPanelMinimized ? 'panel_grabber_expand_aria' : 'panel_grabber_collapse_aria', language);
+    t(
+      isTripPanelMinimized ? "panel_grabber_expand_aria" : "panel_grabber_collapse_aria",
+      language as Language
+    );
 
   const getPanelTransformClass = () => {
-    if (appState === AppState.IN_PROGRESS) return 'translate-y-[calc(100%+1rem)]';
-    if (isPanelMinimized && appState !== AppState.DRIVER_EN_ROUTE) return 'translate-y-[calc(100%-8rem)]';
-    return 'translate-y-0';
+    if (appState === AppState.IN_PROGRESS) return "translate-y-[calc(100%+1rem)]";
+    if (isPanelMinimized && appState !== AppState.DRIVER_EN_ROUTE) return "translate-y-[calc(100%-8rem)]";
+    return "translate-y-0";
   };
 
   const getTripPanelTransformClass = () => {
-    if (appState !== AppState.IN_PROGRESS) return 'translate-y-[calc(100%+1rem)]';
-    return isTripPanelMinimized ? 'translate-y-[calc(100%-4.5rem)]' : 'translate-y-0';
+    if (appState !== AppState.IN_PROGRESS) return "translate-y-[calc(100%+1rem)]";
+    return isTripPanelMinimized ? "translate-y-[calc(100%-4.5rem)]" : "translate-y-0";
   };
-  
-  const getPanelZIndexClass = () => (appState === AppState.DRIVER_EN_ROUTE ? 'z-[51]' : 'z-30');
+
+  const getPanelZIndexClass = () => (appState === AppState.DRIVER_EN_ROUTE ? "z-[51]" : "z-30");
 
   const showLoadingSpinner = [AppState.CALCULATING, AppState.VERIFYING_PAYMENT].includes(appState);
+
   const getLoadingMessage = () => {
-    if (appState === AppState.CALCULATING) return t('loading_calculating', language);
-    if (appState === AppState.VERIFYING_PAYMENT) return t('loading_verifying_payment', language);
-    return '';
+    if (appState === AppState.CALCULATING) return t("loading_calculating", language as Language);
+    if (appState === AppState.VERIFYING_PAYMENT) return t("loading_verifying_payment", language as Language);
+    return "";
   };
 
   const renderContent = isDriverMode ? renderDriverContent() : renderRiderContent();
@@ -135,18 +150,13 @@ const App: React.FC = () => {
   const showChatButton = [AppState.AWAITING_DRIVER, AppState.DRIVER_EN_ROUTE, AppState.IN_PROGRESS].includes(appState);
 
   // Map-specific error (so we can hide map-dependent UI if needed)
-  const isMapError = !!serverError && serverError.toLowerCase().includes('google');
+  const isMapError = !!serverError && serverError.toLowerCase().includes("google");
 
   return (
     <div className="h-screen w-screen relative overflow-hidden bg-gray-900 font-sans antialiased">
-      
       {/* Map or fallback overlay */}
-      {isMapError ? (
-        <MapErrorOverlay />
-      ) : (
-        <InteractiveMap bottomPanelHeight={bottomPanelHeight} />
-      )}
-      
+      {isMapError ? <MapErrorOverlay /> : <InteractiveMap bottomPanelHeight={bottomPanelHeight} />}
+
       {/* Global Error Banner for non-map errors */}
       {serverError && !isMapError && (
         <div className="absolute top-0 left-0 right-0 bg-red-800/90 text-white p-3 text-center z-[101] text-sm shadow-lg backdrop-blur-sm animate-fade-in">
@@ -167,13 +177,13 @@ const App: React.FC = () => {
           {showLocationBar && <FloatingLocationBar />}
 
           {/* Main Bottom Panel */}
-          <div 
-            ref={panelRef} 
+          <div
+            ref={panelRef}
             className={`absolute bottom-4 left-4 right-4 transition-transform duration-500 ease-in-out ${getPanelTransformClass()} ${getPanelZIndexClass()}`}
           >
             <div className="bg-[#2C2A4A]/95 text-white rounded-2xl shadow-2xl backdrop-blur-md max-w-md mx-auto">
               {/* Grabber */}
-              <div 
+              <div
                 className="w-full h-8 flex justify-center items-center cursor-pointer"
                 onClick={handleTogglePanel}
                 role="button"
@@ -183,20 +193,18 @@ const App: React.FC = () => {
               >
                 <ChevronIcon isMinimized={isPanelMinimized} />
               </div>
-              
-              <div className="px-4 sm:px-6 pb-4 sm:pb-6">
-                {renderContent}
-              </div>
+
+              <div className="px-4 sm:px-6 pb-4 sm:pb-6">{renderContent}</div>
             </div>
           </div>
 
           {/* Trip Progress Panel */}
-          <div 
-            ref={tripPanelRef} 
+          <div
+            ref={tripPanelRef}
             className={`absolute bottom-4 left-4 right-4 transition-transform duration-500 ease-in-out ${getTripPanelTransformClass()} z-[51]`}
           >
             <div className="bg-[#2C2A4A]/95 text-white rounded-2xl shadow-2xl backdrop-blur-md max-w-md mx-auto">
-              <div 
+              <div
                 className="w-full h-8 flex justify-center items-center"
                 onClick={handleToggleTripPanel}
                 role="button"
@@ -211,7 +219,7 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Communication UI */}
           {showChatButton && <ChatButton />}
           {isChatVisible && <ChatPanel />}
@@ -223,9 +231,7 @@ const App: React.FC = () => {
       )}
 
       {/* Fullscreen Loading Spinner */}
-      {showLoadingSpinner && (
-        <LoadingSpinner message={getLoadingMessage()} />
-      )}
+      {showLoadingSpinner && <LoadingSpinner message={getLoadingMessage()} />}
     </div>
   );
 };

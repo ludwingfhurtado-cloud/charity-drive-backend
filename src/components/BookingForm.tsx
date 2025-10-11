@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { RideOption } from '../types';
-import { t } from '../i18n';
+import { RideOption } from '../../types';
+import { t } from '../../i18n';
 import { useAppContext } from '../hooks/useAppContext';
 
 const BookingForm: React.FC = () => {

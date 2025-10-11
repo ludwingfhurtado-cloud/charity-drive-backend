@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocationService } from '../hooks/useLocationService';
-import { LatLng } from '../types';
+import { LatLng } from '../../types';
 import { useAppContext } from '../hooks/useAppContext';
-import { t } from '../i18n';
+import { t } from '../../i18n';
 
 const SearchSpinner = () => (
     <div className="w-4 h-4 border-2 border-t-2 border-gray-400 border-t-white rounded-full animate-spin"></div>

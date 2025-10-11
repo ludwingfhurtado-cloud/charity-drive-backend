@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { t } from '../i18n';
-import { RideRequest } from '../types';
+import { t } from '../../i18n';
+import { RideRequest } from '../../types';
 
 const DriverDashboard: React.FC = () => {
     const { availableRides, handleAcceptRide, language, updateRideDetails, serverError, isTestingConnection, handleTestConnection } = useAppContext();

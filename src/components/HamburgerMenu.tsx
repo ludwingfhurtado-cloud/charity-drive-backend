@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { t } from '../i18n';
+import { t } from '../../i18n';
 
 const ServerStatusIndicator: React.FC = () => {
     const { serverStatus, language, checkServerStatus } = useAppContext();

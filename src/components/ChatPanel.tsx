@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { t } from '../i18n';
+import { t } from '../../i18n';
 
 const ChatPanel: React.FC = () => {
     const { language, toggleChat, chatHistory, sendMessage, isDriverMode, initiateCall } = useAppContext();

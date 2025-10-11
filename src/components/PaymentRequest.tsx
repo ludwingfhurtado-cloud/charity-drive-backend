@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { t } from '../i18n';
+import { t } from '../../i18n';
 
 const PaymentRequest: React.FC = () => {
     const { language, rideDetails } = useAppContext();

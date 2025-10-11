@@ -4,6 +4,8 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 import { io, Socket } from "socket.io-client";
@@ -43,57 +45,43 @@ export interface CallDetails {
 // 🔹 Context Type Definition
 // ==============================
 export interface AppContextType {
-  // Core app state
   appState: AppState;
   setAppState: React.Dispatch<React.SetStateAction<AppState>>;
 
-  // Ride & charity data
   rideOptions: RideOption[];
   charities: Charity[];
   rideDetails: RideDetails;
   updateRideDetails: (details: Partial<RideDetails>) => void;
-  handleBookingSubmit: (
-    option: RideOption,
-    fare: number,
-    charityId: string
-  ) => void;
+  handleBookingSubmit: (option: RideOption, fare: number, charityId: string) => void;
 
-  // Route calculation
   calculateRouteDetails: (
     pickup: google.maps.LatLngLiteral,
     dropoff: google.maps.LatLngLiteral,
     option: RideOption
   ) => void;
 
-  // Error handling
   serverError: string | null;
   setServerError: React.Dispatch<React.SetStateAction<string | null>>;
 
-  // Language
   language: string;
   setLanguage: React.Dispatch<React.SetStateAction<string>>;
 
-  // Driver/Trip panels
   isPanelMinimized: boolean;
   setIsPanelMinimized: React.Dispatch<React.SetStateAction<boolean>>;
   isTripPanelMinimized: boolean;
   setIsTripPanelMinimized: React.Dispatch<React.SetStateAction<boolean>>;
 
-  // Driver mode
   isDriverMode: boolean;
   setIsDriverMode: React.Dispatch<React.SetStateAction<boolean>>;
 
-  // Testing connection
   isTestingConnection: boolean;
   handleTestConnection: () => void;
 
-  // Call & chat
   callDetails: CallDetails;
   setCallDetails: React.Dispatch<React.SetStateAction<CallDetails>>;
   isChatVisible: boolean;
   setIsChatVisible: React.Dispatch<React.SetStateAction<boolean>>;
 
-  // Socket.io connection
   socket: Socket | null;
 }
 
@@ -108,15 +96,13 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // ====== STATE HOOKS ======
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
-  const [language, setLanguage] = useState<string>("en");
-  const [isPanelMinimized, setIsPanelMinimized] = useState<boolean>(false);
-  const [isTripPanelMinimized, setIsTripPanelMinimized] =
-    useState<boolean>(false);
-  const [isDriverMode, setIsDriverMode] = useState<boolean>(false);
+  const [language, setLanguage] = useState("en");
+  const [isPanelMinimized, setIsPanelMinimized] = useState(false);
+  const [isTripPanelMinimized, setIsTripPanelMinimized] = useState(false);
+  const [isDriverMode, setIsDriverMode] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [isChatVisible, setIsChatVisible] = useState<boolean>(false);
-  const [isTestingConnection, setIsTestingConnection] =
-    useState<boolean>(false);
+  const [isChatVisible, setIsChatVisible] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
 
   const [rideOptions] = useState<RideOption[]>([
     { id: "standard", name: "Standard", baseFare: 10, multiplier: 1 },
@@ -132,26 +118,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [rideDetails, setRideDetails] = useState<RideDetails>({
     suggestedFare: 0,
-    rideOption: { id: "standard", name: "Standard", baseFare: 10 },
+    rideOption: { id: "standard", name: "Standard", baseFare: 10, multiplier: 1 },
   });
 
   const [callDetails, setCallDetails] = useState<CallDetails>({
     status: CallStatus.NONE,
   });
 
-  // ====== SOCKET.IO ======
+  // ====== SOCKET.IO CONNECTION ======
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const s: Socket = io("http://localhost:3001", {
-      transports: ["websocket"],
-    });
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+    const s: Socket = io(SOCKET_URL, { transports: ["websocket"] });
 
-    s.on("connect", () => console.log("✅ Socket connected:", s.id));
-    s.on("disconnect", () => console.log("⚠️ Socket disconnected"));
-
-    // Fix TypeScript complaint about Record<string,string>
-    s.on("server_error", (err: unknown) => {
+    const handleConnect = () => console.log("✅ Socket connected:", s.id);
+    const handleDisconnect = () => console.log("⚠️ Socket disconnected");
+    const handleServerError = (err: unknown) => {
       const msg =
         typeof err === "string"
           ? err
@@ -159,101 +142,124 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ? err.message
           : JSON.stringify(err);
       setServerError(msg);
-    });
+    };
 
-setSocket(s);
+    s.on("connect", handleConnect);
+    s.on("disconnect", handleDisconnect);
+    s.on("server_error", handleServerError);
 
-// ✅ Cleanup: properly typed and returns void
-return (): void => {
-  // Properly cast to any to bypass TS type issue
-  (s as any)?.removeAllListeners?.();
-  s.disconnect();
-};
-}, []);
+    setSocket(s);
 
-// ====== LOCATION SERVICE ======
-const { location } = useLocationService();
-useEffect(() => {
-  if (socket && location) {
-    socket.emit("update_location", location);
-  }
-}, [socket, location]);
+    // ✅ Cleanup — remove specific listeners
+    return () => {
+      (s as any).off("connect", handleConnect);
+      (s as any).off("disconnect", handleDisconnect);
+      (s as any).off("server_error", handleServerError);
+      s.disconnect();
+      console.log("🧹 Socket cleaned up");
+    };
+  }, []);
 
-// ====== HELPERS ======
-const updateRideDetails = (details: Partial<RideDetails>) =>
-  setRideDetails((prev) => ({ ...prev, ...details }));
-
-const calculateRouteDetails = (
-  pickup: google.maps.LatLngLiteral,
-  dropoff: google.maps.LatLngLiteral,
-  option: RideOption
-) => {
-  const distanceKm = Math.random() * 10 + 1;
-  const suggestedFare =
-    option.baseFare + distanceKm * 2 * (option.multiplier ?? 1);
-  setRideDetails((prev) => ({ ...prev, pickup, dropoff, suggestedFare }));
-};
-
-const handleBookingSubmit = (
-  option: RideOption,
-  fare: number,
-  charityId: string
-) => {
-  if (!socket) {
-    setServerError("No server connection.");
-    return;
-  }
-  socket.emit("booking_request", { option, fare, charityId, rideDetails });
-  setAppState(AppState.AWAITING_DRIVER);
-};
-
-const handleTestConnection = () => {
-  if (!socket) return;
-  setIsTestingConnection(true);
-  (socket as any).timeout?.(3000).emit(
-    "ping_test",
-    {},
-    (err: unknown, response: any) => {
-      setIsTestingConnection(false);
-      if (err) {
-        setServerError("Server not responding.");
-      } else {
-        alert("✅ Server connection healthy!");
-      }
+  // ====== LOCATION SERVICE ======
+  const { location } = useLocationService();
+  useEffect(() => {
+    if (socket && location) {
+      socket.emit("update_location", location);
     }
+  }, [socket, location]);
+
+  // ====== HELPERS ======
+  const updateRideDetails = useCallback((details: Partial<RideDetails>) => {
+    setRideDetails((prev) => ({ ...prev, ...details }));
+  }, []);
+
+  const calculateRouteDetails = useCallback(
+    (pickup: google.maps.LatLngLiteral, dropoff: google.maps.LatLngLiteral, option: RideOption) => {
+      const distanceKm = Math.random() * 10 + 1;
+      const suggestedFare = option.baseFare + distanceKm * 2 * (option.multiplier ?? 1);
+      setRideDetails((prev) => ({ ...prev, pickup, dropoff, suggestedFare }));
+    },
+    []
   );
-};
 
-// ====== PROVIDER VALUE ======
-const value: AppContextType = {
-  appState,
-  setAppState,
-  rideOptions,
-  charities,
-  rideDetails,
-  updateRideDetails,
-  handleBookingSubmit,
-  calculateRouteDetails,
-  serverError,
-  setServerError,
-  language,
-  setLanguage,
-  isPanelMinimized,
-  setIsPanelMinimized,
-  isTripPanelMinimized,
-  setIsTripPanelMinimized,
-  isDriverMode,
-  setIsDriverMode,
-  isTestingConnection,
-  handleTestConnection,
-  callDetails,
-  setCallDetails,
-  isChatVisible,
-  setIsChatVisible,
-  socket,
-};
+  const handleBookingSubmit = useCallback(
+    (option: RideOption, fare: number, charityId: string) => {
+      if (!socket) {
+        setServerError("No server connection.");
+        return;
+      }
+      socket.emit("booking_request", { option, fare, charityId, rideDetails });
+      setAppState(AppState.AWAITING_DRIVER);
+    },
+    [socket, rideDetails]
+  );
 
-return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  const handleTestConnection = useCallback(() => {
+    if (!socket) return;
+    setIsTestingConnection(true);
+    (socket as any)
+      ?.timeout?.(3000)
+      .emit("ping_test", {}, (err: unknown, response: any) => {
+        setIsTestingConnection(false);
+        if (err) {
+          setServerError("Server not responding.");
+        } else {
+          alert("✅ Server connection healthy!");
+        }
+      });
+  }, [socket]);
+
+  // ====== PROVIDER VALUE (MEMOIZED) ======
+  const value = useMemo<AppContextType>(
+    () => ({
+      appState,
+      setAppState,
+      rideOptions,
+      charities,
+      rideDetails,
+      updateRideDetails,
+      handleBookingSubmit,
+      calculateRouteDetails,
+      serverError,
+      setServerError,
+      language,
+      setLanguage,
+      isPanelMinimized,
+      setIsPanelMinimized,
+      isTripPanelMinimized,
+      setIsTripPanelMinimized,
+      isDriverMode,
+      setIsDriverMode,
+      isTestingConnection,
+      handleTestConnection,
+      callDetails,
+      setCallDetails,
+      isChatVisible,
+      setIsChatVisible,
+      socket,
+    }),
+    [
+      appState,
+      rideOptions,
+      charities,
+      rideDetails,
+      language,
+      isPanelMinimized,
+      isTripPanelMinimized,
+      isDriverMode,
+      isTestingConnection,
+      callDetails,
+      isChatVisible,
+      socket,
+      serverError,
+      updateRideDetails,
+      calculateRouteDetails,
+      handleBookingSubmit,
+      handleTestConnection,
+    ]
+  );
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
 // ==============================
@@ -266,3 +272,5 @@ export const useAppContext = (): AppContextType => {
   }
   return context;
 };
+
+export default AppContext;

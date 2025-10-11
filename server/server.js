@@ -40,6 +40,6 @@ app.get('/health', (req, res) => {
 
 // ✅ Start Server
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`🚀 Charity Drive server listening on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Charity Drive backend running on port ${PORT}`);
 });

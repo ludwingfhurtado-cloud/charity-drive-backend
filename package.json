@@ -5,12 +5,12 @@
     "description": "Full CharityDrive application (frontend + backend)",
     "type": "module",
     "scripts": {
-        "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\"",
+        "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
         "dev:frontend": "vite",
-        "dev:backend": "node server/server.js",
+        "dev:backend": "cd server && npm start",
         "build": "vite build",
         "preview": "vite preview",
-        "start": "node server/server.js"
+        "postinstall": "cd server && npm install"
     },
     "dependencies": {
         "@google/genai": "^1.20.0",

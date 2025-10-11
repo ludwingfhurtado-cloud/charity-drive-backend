@@ -1,34 +1,39 @@
+// ===========================================
 // ✅ Charity Drive Backend - Production Ready
-// -------------------------------------------
+// ===========================================
 // Author: Don Lu
-// Purpose: Express + MongoDB server optimized for Railway deploy
-// -------------------------------------------
+// Purpose: Express + MongoDB backend optimized for Railway
+// ===========================================
 
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 
 // ==============================
 // 🔹 Middleware
 // ==============================
-app.use(cors({ origin: "*" })); // adjust later to your frontend URL for security
+app.use(cors({ origin: "*" })); // TODO: replace "*" with your frontend domain in production
 app.use(express.json());
 
 // ==============================
-// 🔹 Health & Root Endpoints (required for Railway)
+// 🔹 Health & Root Endpoints (for Railway)
 // ==============================
 app.get("/", (_req, res) => res.send("✅ Charity Drive API running"));
 app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));
 
 // ==============================
-// 🔹 Database Connection
+// 🔹 MongoDB Connection
 // ==============================
 const MONGO_URI = process.env.MONGODB_URI;
 
 if (!MONGO_URI) {
-    console.error("❌ Missing MONGODB_URI environment variable");
+    console.error("❌ Missing MONGODB_URI environment variable.");
     process.exit(1);
 }
 
@@ -48,7 +53,7 @@ mongoose
 // ==============================
 app.get("/api/example", (_req, res) => {
     res.json({
-        message: "🚀 Charity Drive API is fully operational",
+        message: "🚀 Charity Drive API is fully operational.",
         version: "1.0.0",
     });
 });
@@ -57,7 +62,7 @@ app.get("/api/example", (_req, res) => {
 // 🔹 Server Listen
 // ==============================
 const PORT = process.env.PORT || 3001;
-const HOST = "0.0.0.0"; // required for Railway container access
+const HOST = "0.0.0.0"; // Required for Railway containers
 
 app.listen(PORT, HOST, () => {
     console.log(`✅ Charity Drive server listening on port ${PORT}`);

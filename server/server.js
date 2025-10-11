@@ -16,16 +16,53 @@ dotenv.config({ path: path.join(__dirname, ".env") });
 
 // ✅ Initialize Express
 const app = express();
-app.use(cors());
+
+// ✅ CORS - Allow frontend URL or wildcard in development
+const allowedOrigins = process.env.FRONTEND_URL ?
+    [process.env.FRONTEND_URL] :
+    ['*'];
+
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
+
 app.use(express.json());
+
+// ✅ Health check routes (important for Railway)
+app.get('/', (_req, res) => {
+    res.send('✅ Charity Drive API running');
+});
+
+app.get('/healthz', (_req, res) => {
+    res.status(200).json({
+        ok: true,
+        timestamp: new Date().toISOString(),
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    });
+});
 
 // ✅ Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ Successfully connected to MongoDB"))
-    .catch(err => console.error("❌ MongoDB connection error:", err));
+    .catch(err => {
+        console.error("❌ MongoDB connection error:", err);
+        // Don't exit - Railway will restart the service
+    });
 
-// ✅ Start Server
+// ✅ Graceful shutdown handler
+process.on('SIGTERM', async() => {
+    console.log('⚠️ SIGTERM received, closing server gracefully...');
+    await mongoose.connection.close();
+    process.exit(0);
+});
+
+// ✅ Start Server - Bind to Railway's port and all interfaces
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Charity Drive backend running on port ${PORT}`);
+const HOST = '0.0.0.0'; // Important for containers/Railway
+
+app.listen(PORT, HOST, () => {
+    console.log(`🚀 Charity Drive backend running on ${HOST}:${PORT}`);
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
 });

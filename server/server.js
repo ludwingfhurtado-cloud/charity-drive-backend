@@ -24,14 +24,6 @@ mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ Successfully connected to MongoDB"))
     .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// 🩺 Unified Healthcheck route
-app.get("/health", (req, res) => {
-    res.status(200).json({
-        status: "ok",
-        message: "CharityDrive backend is healthy and running 🚀"
-    });
-});
-
 // ✅ Start Server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {

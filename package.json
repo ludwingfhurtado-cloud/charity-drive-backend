@@ -26,6 +26,7 @@
         "socket.io-client": "^4.8.1"
     },
     "devDependencies": {
+        "@tailwindcss/postcss": "^4.1.14",
         "@types/axios": "^0.9.36",
         "@types/google.maps": "^3.58.1",
         "@types/node": "^22.18.8",

@@ -1,52 +1,77 @@
 {
   "compilerOptions": {
-    /* === Target & Module === */
+    /* ================================
+     * 🔹 ECMAScript & Target Settings
+     * ================================ */
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
 
-    /* === React / JSX === */
+    /* ================================
+     * 🔹 React / JSX
+     * ================================ */
     "jsx": "react-jsx",
 
-    /* === Module Resolution === */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "allowSyntheticDefaultImports": true,
+    /* ================================
+     * 🔹 Interop & Module Handling
+     * ================================ */
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
 
-    /* === Strictness & Safety === */
+    /* ================================
+     * 🔹 Type Checking & Safety
+     * ================================ */
     "strict": true,
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noImplicitAny": true,
 
-    /* === Types & Global Declarations === */
-    "types": ["node", "vite/client", "@types/google.maps"],
-
-    /* === Decorators & JS Support === */
+    /* ================================
+     * 🔹 JS Support & Decorators
+     * ================================ */
+    "allowJs": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "allowJs": true,
 
-    /* === Emit Control === */
+    /* ================================
+     * 🔹 Emission Control
+     * ================================ */
     "noEmit": true,
 
-    /* === Path Aliases === */
+    /* ================================
+     * 🔹 Type Definitions
+     * ================================ */
+    "types": [
+      "node",
+      "vite/client",
+      "@types/google.maps"
+    ],
+
+    /* ================================
+     * 🔹 Path Aliases
+     * ================================ */
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
 
-  /* === Included Source Files === */
+  /* ================================
+   * 🔹 Include & Exclude
+   * ================================ */
   "include": [
     "src",
     "vite.config.ts",
+    "server/**/*.ts",
     "types.d.ts",
-    "src/types/socket.d.ts"
+    "src/types/**/*"
   ],
-
-  /* === Excluded Folders === */
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
 }

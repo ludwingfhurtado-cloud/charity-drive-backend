@@ -29,6 +29,15 @@ app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
 });
 
+// 🩺 Healthcheck route
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        message: 'CharityDrive backend is healthy and running 🚀'
+    });
+});
+
+
 // ✅ Start Server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

@@ -1,5 +1,5 @@
 // ================================================
-// 🌍 Charity Drive Backend Server (Production Ready)
+// 🌍 Charity Drive Backend Server (ESM compatible)
 // ================================================
 
 import express from "express";
@@ -10,29 +10,24 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // ================================================
-// 🔧 Enable __dirname in ES Modules
+// 🧭 Enable __dirname in ES modules
 // ================================================
 const __filename = fileURLToPath(
     import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ================================================
-// 🔒 Load environment variables (local only)
-// Railway provides env vars automatically
+// 🔒 Load environment variables
 // ================================================
-if (!process.env.RAILWAY_ENVIRONMENT) {
-    dotenv.config({ path: path.join(__dirname, ".env.local") });
-    dotenv.config({ path: path.join(__dirname, ".env") });
-}
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 // ================================================
-// 🚀 Initialize Express App
+// 🚀 Initialize Express
 // ================================================
 const app = express();
 
 // ================================================
-// 🌐 Configure CORS
-// Allow frontend URL in production, all origins in dev
+// 🌐 CORS configuration
 // ================================================
 const allowedOrigins = process.env.FRONTEND_URL ?
     [process.env.FRONTEND_URL] :
@@ -48,7 +43,7 @@ app.use(
 app.use(express.json());
 
 // ================================================
-// 🩺 Health Check Routes (important for Railway)
+// 🩺 Health check routes
 // ================================================
 app.get("/", (_req, res) => {
     res.send("✅ Charity Drive API running");
@@ -57,8 +52,8 @@ app.get("/", (_req, res) => {
 app.get("/healthz", (_req, res) => {
     res.status(200).json({
         ok: true,
-        timestamp: new Date().toISOString(),
         mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+        timestamp: new Date().toISOString(),
     });
 });
 
@@ -68,44 +63,40 @@ app.get("/healthz", (_req, res) => {
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-    console.error("❌ Missing MONGODB_URI environment variable");
-    console.error(
-        "📋 Available env vars:",
-        Object.keys(process.env).filter((k) => !k.toLowerCase().includes("secret"))
-    );
-} else {
-    console.log("✅ MONGODB_URI detected");
-    console.log("📋 Prefix:", MONGODB_URI.substring(0, 12));
-
-    mongoose
-        .connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 10000, // ⏱ graceful timeout
-        })
-        .then(() => {
-            console.log("✅ Successfully connected to MongoDB");
-            console.log("📊 Database:", mongoose.connection.name);
-        })
-        .catch((err) => {
-            console.error("❌ MongoDB connection error:", err.message);
-            process.exit(1); // ⛔ stop container if DB fails
-        });
+    console.error("❌ Missing MONGODB_URI in environment variables");
+    process.exit(1);
 }
 
+console.log("✅ MONGODB_URI detected");
+console.log("📋 Prefix:", MONGODB_URI.substring(0, 12));
+
+mongoose
+    .connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 })
+    .then(() => {
+        console.log("✅ Connected to MongoDB");
+        console.log("📊 Database:", mongoose.connection.name);
+    })
+    .catch((err) => {
+        console.error("❌ MongoDB connection error:", err.message);
+        process.exit(1);
+    });
+
 // ================================================
-// 🧹 Graceful Shutdown
+// ⚡ Serve frontend (optional)
 // ================================================
-process.on("SIGTERM", async() => {
-    console.log("⚠️ SIGTERM received — closing gracefully...");
-    await mongoose.connection.close();
-    console.log("🛑 MongoDB connection closed");
-    process.exit(0);
+const frontendPath = path.join(__dirname, "dist");
+app.use(express.static(frontendPath));
+
+// Fallback route for SPA
+app.get("*", (req, res) => {
+    res.sendFile(path.join(frontendPath, "index.html"));
 });
 
 // ================================================
-// ⚡ Start Server (Railway uses dynamic PORT)
+// ⚙️ Start server
 // ================================================
 const PORT = process.env.PORT || 3001;
-const HOST = "0.0.0.0"; // must bind to all interfaces
+const HOST = "0.0.0.0";
 
 app.listen(PORT, HOST, () => {
     console.log(`🚀 Charity Drive backend live at http://${HOST}:${PORT}`);

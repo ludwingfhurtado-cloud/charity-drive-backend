@@ -1,4 +1,7 @@
-// server/server.js
+// ================================================
+// 🌍 Charity Drive Backend Server (Production Ready)
+// ================================================
+
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -6,78 +9,106 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// ✅ Enable __dirname in ES Modules
+// ================================================
+// 🔧 Enable __dirname in ES Modules
+// ================================================
 const __filename = fileURLToPath(
     import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ✅ Load environment variables (only if not in Railway/production)
+// ================================================
+// 🔒 Load environment variables (local only)
+// Railway provides env vars automatically
+// ================================================
 if (!process.env.RAILWAY_ENVIRONMENT) {
     dotenv.config({ path: path.join(__dirname, ".env.local") });
     dotenv.config({ path: path.join(__dirname, ".env") });
 }
 
-// ✅ Initialize Express
+// ================================================
+// 🚀 Initialize Express App
+// ================================================
 const app = express();
 
-// ✅ CORS - Allow frontend URL or wildcard in development
+// ================================================
+// 🌐 Configure CORS
+// Allow frontend URL in production, all origins in dev
+// ================================================
 const allowedOrigins = process.env.FRONTEND_URL ?
     [process.env.FRONTEND_URL] :
-    ['*'];
+    ["*"];
 
-app.use(cors({
-    origin: allowedOrigins,
-    credentials: true
-}));
+app.use(
+    cors({
+        origin: allowedOrigins,
+        credentials: true,
+    })
+);
 
 app.use(express.json());
 
-// ✅ Health check routes (important for Railway)
-app.get('/', (_req, res) => {
-    res.send('✅ Charity Drive API running');
+// ================================================
+// 🩺 Health Check Routes (important for Railway)
+// ================================================
+app.get("/", (_req, res) => {
+    res.send("✅ Charity Drive API running");
 });
 
-app.get('/healthz', (_req, res) => {
+app.get("/healthz", (_req, res) => {
     res.status(200).json({
         ok: true,
         timestamp: new Date().toISOString(),
-        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+        mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     });
 });
 
-// ✅ Connect to MongoDB
+// ================================================
+// 💾 Connect to MongoDB
+// ================================================
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
     console.error("❌ Missing MONGODB_URI environment variable");
-    console.error("📋 Available env vars:", Object.keys(process.env).filter(k => !k.includes('SECRET')));
+    console.error(
+        "📋 Available env vars:",
+        Object.keys(process.env).filter((k) => !k.toLowerCase().includes("secret"))
+    );
 } else {
-    console.log("✅ MONGODB_URI is present");
-    console.log("📋 Connection string starts with:", MONGODB_URI.substring(0, 20));
+    console.log("✅ MONGODB_URI detected");
+    console.log("📋 Prefix:", MONGODB_URI.substring(0, 12));
 
-    mongoose.connect(MONGODB_URI)
+    mongoose
+        .connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 10000, // ⏱ graceful timeout
+        })
         .then(() => {
             console.log("✅ Successfully connected to MongoDB");
             console.log("📊 Database:", mongoose.connection.name);
         })
-        .catch(err => {
+        .catch((err) => {
             console.error("❌ MongoDB connection error:", err.message);
+            process.exit(1); // ⛔ stop container if DB fails
         });
 }
 
-// ✅ Graceful shutdown handler
-process.on('SIGTERM', async() => {
-    console.log('⚠️ SIGTERM received, closing server gracefully...');
+// ================================================
+// 🧹 Graceful Shutdown
+// ================================================
+process.on("SIGTERM", async() => {
+    console.log("⚠️ SIGTERM received — closing gracefully...");
     await mongoose.connection.close();
+    console.log("🛑 MongoDB connection closed");
     process.exit(0);
 });
 
-// ✅ Start Server - Bind to Railway's port and all interfaces
+// ================================================
+// ⚡ Start Server (Railway uses dynamic PORT)
+// ================================================
 const PORT = process.env.PORT || 3001;
-const HOST = '0.0.0.0'; // Important for containers/Railway
+const HOST = "0.0.0.0"; // must bind to all interfaces
 
 app.listen(PORT, HOST, () => {
-    console.log(`🚀 Charity Drive backend running on ${HOST}:${PORT}`);
-    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🌐 Allowed origins: ${allowedOrigins.join(', ')}`);
+    console.log(`🚀 Charity Drive backend live at http://${HOST}:${PORT}`);
+    console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`🌐 Allowed origins: ${allowedOrigins.join(", ")}`);
 });

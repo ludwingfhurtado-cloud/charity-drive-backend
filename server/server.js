@@ -82,13 +82,13 @@ mongoose
     });
 
 // ================================================
-// ⚡ Serve frontend (optional)
+// ⚡ Serve frontend build
 // ================================================
-const frontendPath = path.join(__dirname, "dist");
+const frontendPath = path.join(__dirname, "../dist"); // ✅ ensure correct path
 app.use(express.static(frontendPath));
 
-// Fallback route for SPA
-app.get("*", (req, res) => {
+// ✅ Fix wildcard route for Express 5
+app.get(/.*/, (req, res) => {
     res.sendFile(path.join(frontendPath, "index.html"));
 });
 
